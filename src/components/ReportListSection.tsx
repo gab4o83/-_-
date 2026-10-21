@@ -61,36 +61,36 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
     if (blurStates[report.id] !== undefined) {
       return blurStates[report.id];
     }
-    return report.analysis.contains_personal_data;
+    return Boolean(report.analysis?.contains_personal_data);
   };
 
   // Filter & Sort logic
   const filteredAndSortedReports = reports
     .filter((r) => {
-      if (selectedPath !== 'all' && r.analysis.path !== selectedPath) return false;
+      if (selectedPath !== 'all' && (r.analysis?.path || 'blue') !== selectedPath) return false;
       if (selectedNeighborhood !== 'all' && r.neighborhood !== selectedNeighborhood) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesText =
-          r.title.toLowerCase().includes(q) ||
-          r.description.toLowerCase().includes(q) ||
-          r.location.toLowerCase().includes(q) ||
-          r.ticketNumber.toLowerCase().includes(q) ||
-          r.analysis.category.toLowerCase().includes(q);
+          (r.title || '').toLowerCase().includes(q) ||
+          (r.description || '').toLowerCase().includes(q) ||
+          (r.location || '').toLowerCase().includes(q) ||
+          (r.ticketNumber || '').toLowerCase().includes(q) ||
+          (r.analysis?.category || '').toLowerCase().includes(q);
         if (!matchesText) return false;
       }
       return true;
     })
     .sort((a, b) => {
       if (sortBy === 'urgency') {
-        const scoreA = a.analysis.urgencyScore ?? (a.analysis.priority === 'спешен' ? 95 : a.analysis.priority === 'висок' ? 80 : 50);
-        const scoreB = b.analysis.urgencyScore ?? (b.analysis.priority === 'спешен' ? 95 : b.analysis.priority === 'висок' ? 80 : 50);
+        const scoreA = a.analysis?.urgencyScore ?? (a.analysis?.priority === 'спешен' ? 95 : a.analysis?.priority === 'висок' ? 80 : 50);
+        const scoreB = b.analysis?.urgencyScore ?? (b.analysis?.priority === 'спешен' ? 95 : b.analysis?.priority === 'висок' ? 80 : 50);
         return scoreB - scoreA;
       }
       if (sortBy === 'volunteers') {
-        return b.volunteersCount - a.volunteersCount;
+        return (b.volunteersCount || 0) - (a.volunteersCount || 0);
       }
-      return b.id.localeCompare(a.id);
+      return String(b.id || '').localeCompare(String(a.id || ''));
     });
 
   const neighborhoods = Array.from(new Set(reports.map((r) => r.neighborhood))).filter(Boolean);
@@ -194,7 +194,7 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-red-400" />
-            <span>🔴 Само компетентна служба ({reports.filter((r) => r.analysis.path === 'red').length})</span>
+            <span>🔴 Само компетентна служба ({reports.filter((r) => r.analysis?.path === 'red').length})</span>
           </button>
           <button
             type="button"
@@ -206,7 +206,7 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span>🟡 Община + граждани ({reports.filter((r) => r.analysis.path === 'yellow').length})</span>
+            <span>🟡 Община + граждани ({reports.filter((r) => r.analysis?.path === 'yellow').length})</span>
           </button>
           <button
             type="button"
@@ -218,7 +218,7 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-blue-400" />
-            <span>🔵 Гражданска инициатива ({reports.filter((r) => r.analysis.path === 'blue').length})</span>
+            <span>🔵 Гражданска инициатива ({reports.filter((r) => r.analysis?.path === 'blue').length})</span>
           </button>
         </div>
       </div>
@@ -238,7 +238,7 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
           {filteredAndSortedReports.map((report) => {
             const isExpanded = expandedReportId === report.id;
             const blurred = isBlurred(report);
-            const urgencyScore = report.analysis.urgencyScore ?? (report.analysis.priority === 'спешен' ? 95 : 60);
+            const urgencyScore = report.analysis?.urgencyScore ?? (report.analysis?.priority === 'спешен' ? 95 : 60);
 
             return (
               <div
@@ -257,10 +257,10 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
                           blurred ? 'blur-md scale-105' : ''
                         }`}
                       />
-                      {report.analysis.contains_personal_data && (
+                      {report.analysis?.contains_personal_data && (
                         <button
                           type="button"
-                          onClick={() => toggleBlur(report.id, report.analysis.contains_personal_data)}
+                          onClick={() => toggleBlur(report.id, Boolean(report.analysis?.contains_personal_data))}
                           className="absolute bottom-1 right-1 bg-black/80 hover:bg-black text-amber-300 p-1 rounded-md text-[10px] flex items-center gap-1 z-10"
                           title="Превключи замъгляване на лични данни"
                         >
@@ -280,7 +280,7 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
                           {report.ticketNumber}
                         </span>
                         {getStatusBadge(report.status)}
-                        <PriorityBadge priority={report.analysis.priority} />
+                        <PriorityBadge priority={report.analysis?.priority || 'нормален'} />
 
                         {/* AI Urgency Pill Tag */}
                         <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800 text-[11px] font-mono">
@@ -318,10 +318,10 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
 
                   {/* Right side path and action button */}
                   <div className="flex items-center sm:flex-col items-end gap-2.5 shrink-0 w-full sm:w-auto justify-between sm:justify-center border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-800">
-                    <PathBadge path={report.analysis.path} size="sm" />
+                    <PathBadge path={report.analysis?.path || 'blue'} size="sm" />
 
                     <div className="flex items-center gap-2">
-                      {report.status !== 'решен' && report.analysis.path !== 'red' && onOpenResolutionModal && (
+                      {report.status !== 'решен' && report.analysis?.path !== 'red' && onOpenResolutionModal && (
                         <button
                           type="button"
                           onClick={() => onOpenResolutionModal(report)}

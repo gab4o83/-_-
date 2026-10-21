@@ -18,6 +18,7 @@ import {
   Layers
 } from 'lucide-react';
 import { VolunteerProfile, LeaderboardUser } from '../types';
+import { fetchLeaderboardFromFirestore } from '../lib/firestoreService';
 import { MOCK_LEADERBOARD_VOLUNTEERS, VRATSA_DISTRICTS } from '../data/mockReports';
 
 interface VolunteerLeaderboardSectionProps {
@@ -83,8 +84,16 @@ export const VolunteerLeaderboardSection: React.FC<VolunteerLeaderboardSectionPr
 
   const [sqlLeaderboard, setSqlLeaderboard] = useState<LeaderboardUser[]>([]);
 
-  // Fetch real-time leaderboard from Cloud SQL database
+  // Fetch real-time leaderboard from Firestore & backend
   useEffect(() => {
+    fetchLeaderboardFromFirestore()
+      .then((users) => {
+        if (Array.isArray(users) && users.length > 0) {
+          setSqlLeaderboard(users);
+        }
+      })
+      .catch(() => {});
+
     fetch('/api/leaderboard')
       .then((res) => {
         if (!res.ok) throw new Error('Status ' + res.status);
@@ -95,9 +104,7 @@ export const VolunteerLeaderboardSection: React.FC<VolunteerLeaderboardSectionPr
           setSqlLeaderboard(data);
         }
       })
-      .catch((err) => {
-        console.info('Using fallback leaderboard data:', err.message);
-      });
+      .catch(() => {});
   }, [currentVolunteer?.weeklyPoints, currentVolunteer?.totalPoints]);
 
   // Compute leaderboard from Cloud SQL (with mock fallback) with current volunteer included

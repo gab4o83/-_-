@@ -6,6 +6,14 @@
 import React, { useState, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from './lib/firebase';
+import {
+  fetchReportsFromFirestore,
+  subscribeToReports,
+  saveReportToFirestore,
+  updateReportInFirestore,
+  saveUserProfileToFirestore,
+  addPointsToVolunteerInFirestore
+} from './lib/firestoreService';
 import { Header } from './components/Header';
 import { VratsaInteractiveMap } from './components/VratsaInteractiveMap';
 import { SubmitSection } from './components/SubmitSection';
@@ -82,21 +90,37 @@ export default function App() {
     return () => window.removeEventListener('gmp-quota-exceeded', handleQuota);
   }, []);
 
-  // Load reports from Cloud SQL backend
+  // Load reports from Firestore & backend with real-time Firestore sync
   useEffect(() => {
-    fetch('/api/reports')
-      .then((res) => {
-        if (!res.ok) throw new Error('Status ' + res.status);
-        return res.json();
-      })
+    // 1. Initial fetch from Firestore
+    fetchReportsFromFirestore()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setReports(data);
         }
       })
-      .catch((err) => {
-        console.info('Using local cache for reports:', err.message);
-      });
+      .catch((err) => console.info('Firestore initial fetch fallback:', err));
+
+    // 2. Real-time Firestore onSnapshot listener
+    const unsubscribe = subscribeToReports((updatedReports) => {
+      if (Array.isArray(updatedReports) && updatedReports.length > 0) {
+        setReports(updatedReports);
+      }
+    });
+
+    // 3. Fallback check to /api/reports if Express server is running
+    fetch('/api/reports')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setReports(data);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Sync reports to localStorage backup
@@ -133,12 +157,15 @@ export default function App() {
     setActiveTab('map');
     setSelectedReportId(newReport.id);
 
-    // Sync to Cloud SQL
+    // Save directly to Firestore
+    saveReportToFirestore(newReport).catch((e) => console.warn('Could not save to Firestore:', e));
+
+    // Optional backend sync
     fetch('/api/reports', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newReport),
-    }).catch((e) => console.warn('Could not sync report to Cloud SQL:', e));
+    }).catch(() => {});
   };
 
   // Map pin drop -> populate submit
@@ -175,7 +202,10 @@ export default function App() {
     setCurrentVolunteer(profile);
     showToast(`Добре дошли в доброволческия отряд на Враца, ${profile.name}! +50 начални точки.`);
 
-    // Sync to Cloud SQL
+    // Direct Firestore sync
+    saveUserProfileToFirestore(profile).catch((e) => console.warn('Could not sync user to Firestore:', e));
+
+    // Optional backend sync
     fetch('/api/users/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -190,7 +220,7 @@ export default function App() {
         totalPoints: profile.totalPoints,
         skills: profile.skills,
       }),
-    }).catch((e) => console.warn('Could not sync user to Cloud SQL:', e));
+    }).catch(() => {});
   };
 
   // Login as volunteer
@@ -198,7 +228,10 @@ export default function App() {
     setCurrentVolunteer(profile);
     showToast(`Успешен вход! Добре дошли отново, ${profile.name} (${profile.weeklyPoints} т.).`);
 
-    // Sync to Cloud SQL
+    // Direct Firestore sync
+    saveUserProfileToFirestore(profile).catch((e) => console.warn('Could not sync user to Firestore:', e));
+
+    // Optional backend sync
     fetch('/api/users/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -213,8 +246,9 @@ export default function App() {
         totalPoints: profile.totalPoints,
         skills: profile.skills,
       }),
-    }).catch((e) => console.warn('Could not sync user to Cloud SQL:', e));
+    }).catch(() => {});
   };
+
 
   const handleLogoutVolunteer = () => {
     signOut(auth).catch(() => {});
@@ -271,6 +305,27 @@ export default function App() {
       );
     }
 
+    // Direct Firestore update
+    const targetReport = reports.find((r) => r.id === reportId);
+    if (targetReport) {
+      const updatedVolunteers = targetReport.volunteers.includes(volName)
+        ? targetReport.volunteers
+        : [...targetReport.volunteers, volName];
+      updateReportInFirestore(reportId, {
+        volunteersCount: updatedVolunteers.length,
+        volunteers: updatedVolunteers,
+        status: targetReport.status === 'нови' ? 'прегледан' : targetReport.status,
+        historyLog: [
+          ...targetReport.historyLog,
+          {
+            timestamp: 'Днес, ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            actor: volName,
+            action: 'Записа се като доброволец за тази градска инициатива'
+          }
+        ]
+      }).catch((e) => console.warn('Could not update report in Firestore:', e));
+    }
+
     showToast(`Благодарим, ${volName}! Записан сте като доброволец за тази задача.`);
   };
 
@@ -296,6 +351,13 @@ export default function App() {
         return r;
       })
     );
+
+    // Sync to Firestore
+    updateReportInFirestore(reportId, {
+      status: 'одобрен',
+      municipalNotes: notes
+    }).catch((e) => console.warn('Could not update approval in Firestore:', e));
+
     showToast('Планът за действие е официално одобрен от Община Враца.');
   };
 
@@ -321,6 +383,13 @@ export default function App() {
         return r;
       })
     );
+
+    // Sync to Firestore
+    updateReportInFirestore(reportId, {
+      status: 'в_изпълнение',
+      assignedDepartment: dept
+    }).catch((e) => console.warn('Could not update department in Firestore:', e));
+
     showToast(`Сигналът е насочен към: ${dept}`);
   };
 
@@ -350,7 +419,11 @@ export default function App() {
         activeAssignments: currentVolunteer.activeAssignments.filter((id) => id !== updatedReport.id)
       });
 
-      // Sync points and rank to Cloud SQL
+      // Direct Firestore points sync
+      addPointsToVolunteerInFirestore(currentVolunteer.id, pointsAwarded, newRank)
+        .catch((e) => console.warn('Could not add points in Firestore:', e));
+
+      // Optional backend sync
       fetch('/api/users/add-points', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -359,10 +432,18 @@ export default function App() {
           points: pointsAwarded,
           rank: newRank,
         }),
-      }).catch((e) => console.warn('Could not sync points to Cloud SQL:', e));
+      }).catch(() => {});
     }
 
-    // Sync resolution to Cloud SQL report
+    // Direct Firestore report resolution sync
+    updateReportInFirestore(updatedReport.id, {
+      status: 'решен',
+      resolvedImageUrl: updatedReport.resolvedImageUrl,
+      resolvedAt: updatedReport.resolvedAt,
+      resolvedByVolunteer: updatedReport.resolvedByVolunteer,
+    }).catch((e) => console.warn('Could not sync resolution to Firestore:', e));
+
+    // Optional backend sync
     fetch(`/api/reports/${updatedReport.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -372,7 +453,7 @@ export default function App() {
         resolvedAt: updatedReport.resolvedAt,
         resolvedByVolunteer: updatedReport.resolvedByVolunteer,
       }),
-    }).catch((e) => console.warn('Could not sync resolution to Cloud SQL:', e));
+    }).catch(() => {});
 
     setResolutionReport(null);
     showToast(`Браво! AI присъди +${pointsAwarded} точки за седмичната класация!`);

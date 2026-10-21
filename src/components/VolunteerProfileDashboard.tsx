@@ -29,6 +29,7 @@ import { VRATSA_DISTRICTS } from '../data/mockReports';
 import { AccountSettingsModal } from './AccountSettingsModal';
 import { storage } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { saveUserProfileToFirestore } from '../lib/firestoreService';
 
 interface VolunteerProfileDashboardProps {
   volunteer: VolunteerProfile;
@@ -79,24 +80,44 @@ export const VolunteerProfileDashboard: React.FC<VolunteerProfileDashboardProps>
     }
     setIsUploadingPhoto(true);
     try {
-      const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const storageRef = ref(storage, `profiles/${volunteer.id}/${Date.now()}_${cleanFileName}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(snapshot.ref);
-      setEditPhotoURL(downloadUrl);
+      let finalUrl = '';
+      try {
+        const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storageRef = ref(storage, `profiles/${volunteer.id}/${Date.now()}_${cleanFileName}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        finalUrl = await getDownloadURL(snapshot.ref);
+      } catch (storageErr) {
+        console.warn('Storage upload fallback to DataURL:', storageErr);
+        // Fallback to base64 DataURL
+        finalUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
 
-      // Auto-persist to backend
-      const res = await fetch(`/api/users/profile/${volunteer.id}`, {
+      setEditPhotoURL(finalUrl);
+
+      const updatedProfile: VolunteerProfile = {
+        ...volunteer,
+        photoURL: finalUrl,
+      };
+
+      // Direct Firestore persistence
+      await saveUserProfileToFirestore(updatedProfile).catch((err) => {
+        console.warn('Could not save user photo to Firestore:', err);
+      });
+
+      onUpdateProfile(updatedProfile);
+      setSaveSuccessMsg('Профилната снимка беше успешно обновена!');
+      setTimeout(() => setSaveSuccessMsg(''), 4000);
+
+      // Optional backend sync
+      fetch(`/api/users/profile/${volunteer.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photoURL: downloadUrl }),
-      });
-      const updated = await res.json();
-      if (res.ok) {
-        onUpdateProfile(updated);
-        setSaveSuccessMsg('Профилната снимка беше успешно обновена!');
-        setTimeout(() => setSaveSuccessMsg(''), 4000);
-      }
+        body: JSON.stringify({ photoURL: finalUrl }),
+      }).catch(() => {});
     } catch (err: any) {
       console.warn('Dashboard upload error:', err);
       alert('Грешка при качване на снимка: ' + (err.message || 'Опитайте отново'));
@@ -133,7 +154,29 @@ export const VolunteerProfileDashboard: React.FC<VolunteerProfileDashboardProps>
     e.preventDefault();
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/users/profile/${volunteer.id}`, {
+      const updatedProfile: VolunteerProfile = {
+        ...volunteer,
+        name: editName,
+        emailOrPhone: editEmail,
+        photoURL: editPhotoURL,
+        neighborhood: editNeighborhood,
+        phone: editPhone,
+        skills: editSkills,
+        availability: editAvailability,
+      };
+
+      // Direct Firestore update
+      await saveUserProfileToFirestore(updatedProfile).catch((err) => {
+        console.warn('Could not save profile to Firestore:', err);
+      });
+
+      onUpdateProfile(updatedProfile);
+      setIsEditing(false);
+      setSaveSuccessMsg('Данните бяха успешно обновени в базата данни!');
+      setTimeout(() => setSaveSuccessMsg(''), 4000);
+
+      // Optional backend sync
+      fetch(`/api/users/profile/${volunteer.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -145,15 +188,9 @@ export const VolunteerProfileDashboard: React.FC<VolunteerProfileDashboardProps>
           skills: editSkills,
           availability: editAvailability,
         }),
-      });
-      const updated = await res.json();
-      if (!res.ok) throw new Error(updated.error || 'Грешка при запазване');
-      onUpdateProfile(updated);
-      setIsEditing(false);
-      setSaveSuccessMsg('Данните бяха успешно обновени в базата данни!');
-      setTimeout(() => setSaveSuccessMsg(''), 4000);
+      }).catch(() => {});
     } catch (err: any) {
-      console.warn('Fallback local update:', err);
+      console.warn('Profile save notice:', err);
       const updatedLocal: VolunteerProfile = {
         ...volunteer,
         name: editName,

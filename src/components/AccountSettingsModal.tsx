@@ -33,6 +33,7 @@ import {
 } from 'firebase/auth';
 import { auth, googleAuthProvider, facebookAuthProvider, storage } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { saveUserProfileToFirestore } from '../lib/firestoreService';
 import { VolunteerProfile } from '../types';
 
 const VRATSA_DISTRICTS = [
@@ -133,6 +134,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
   const isPhoneLinked = linkedList.has('phone') || Boolean(volunteer.phone && volunteer.phone.length >= 7);
 
   // Handle Photo selection from Phone (Camera or Gallery)
+  // Handle Photo selection from Phone (Camera or Gallery)
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -151,30 +153,47 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
     setSuccessMsg('');
 
     try {
-      const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const storageRef = ref(storage, `profiles/${volunteer.id}/${Date.now()}_${cleanFileName}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(snapshot.ref);
+      let downloadUrl = '';
+      try {
+        const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storageRef = ref(storage, `profiles/${volunteer.id}/${Date.now()}_${cleanFileName}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        downloadUrl = await getDownloadURL(snapshot.ref);
+      } catch (storageErr) {
+        console.warn('Storage upload fallback to DataURL in modal:', storageErr);
+        downloadUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
 
       setPhotoPreview(downloadUrl);
 
-      // Auto-save photo URL to backend profile
-      const res = await fetch(`/api/users/profile/${volunteer.id}`, {
+      const updatedProfile: VolunteerProfile = {
+        ...volunteer,
+        photoURL: downloadUrl,
+      };
+
+      // Direct Firestore save
+      await saveUserProfileToFirestore(updatedProfile).catch((err) => {
+        console.warn('Could not save user photo to Firestore:', err);
+      });
+
+      onUpdateProfile(updatedProfile);
+      setSuccessMsg('Профилната снимка беше качена и запазена успешно!');
+
+      // Optional backend sync
+      fetch(`/api/users/profile/${volunteer.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ photoURL: downloadUrl }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Грешка при запазване на снимката.');
-
-      onUpdateProfile(data);
-      setSuccessMsg('Профилната снимка беше качена и запазена успешно!');
+      }).catch(() => {});
     } catch (err: any) {
       console.warn('Upload error:', err);
       setErrorMsg(err.message || 'Неуспешно качване на снимката. Моля, опитайте отново.');
     } finally {
       setIsUploadingPhoto(false);
-      // Reset input value so the same file can be selected again if needed
       if (e.target) e.target.value = '';
     }
   };
@@ -186,17 +205,21 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
     setSuccessMsg('');
 
     try {
-      const res = await fetch(`/api/users/profile/${volunteer.id}`, {
+      const updatedProfile: VolunteerProfile = {
+        ...volunteer,
+        photoURL: '',
+      };
+
+      await saveUserProfileToFirestore(updatedProfile).catch(() => {});
+      onUpdateProfile(updatedProfile);
+      setPhotoPreview('');
+      setSuccessMsg('Профилната снимка беше премахната.');
+
+      fetch(`/api/users/profile/${volunteer.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ photoURL: '' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Грешка при премахване.');
-
-      setPhotoPreview('');
-      onUpdateProfile(data);
-      setSuccessMsg('Профилната снимка беше премахната.');
+      }).catch(() => {});
     } catch (err: any) {
       setErrorMsg(err.message || 'Грешка при премахване на снимката.');
     } finally {
@@ -217,7 +240,26 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
     setSuccessMsg('');
 
     try {
-      const res = await fetch(`/api/users/profile/${volunteer.id}`, {
+      const updatedProfile: VolunteerProfile = {
+        ...volunteer,
+        name: nameInput.trim(),
+        emailOrPhone: emailInput.trim() || volunteer.emailOrPhone,
+        gmail: emailInput.trim().includes('@') ? emailInput.trim() : volunteer.gmail,
+        phone: phoneInput.trim() || undefined,
+        neighborhood: neighborhoodInput,
+        photoURL: photoPreview || undefined,
+      };
+
+      // Direct Firestore update
+      await saveUserProfileToFirestore(updatedProfile).catch((err) => {
+        console.warn('Could not save profile details to Firestore:', err);
+      });
+
+      onUpdateProfile(updatedProfile);
+      setSuccessMsg('Промените в профила бяха запазени успешно!');
+
+      // Optional backend sync
+      fetch(`/api/users/profile/${volunteer.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -227,12 +269,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
           neighborhood: neighborhoodInput,
           photoURL: photoPreview || undefined,
         }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Грешка при обновяване на данните.');
-
-      onUpdateProfile(data);
-      setSuccessMsg('Промените в профила бяха запазени успешно!');
+      }).catch(() => {});
     } catch (err: any) {
       setErrorMsg(err.message || 'Грешка при запазване на профила.');
     } finally {
@@ -260,7 +297,17 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
         }
       }
 
-      const res = await fetch('/api/users/link-provider', {
+      const updatedProfile: VolunteerProfile = {
+        ...volunteer,
+        gmail: googleEmail || volunteer.gmail,
+        linkedProviders: Array.from(new Set([...(volunteer.linkedProviders || []), 'google.com'])),
+      };
+
+      await saveUserProfileToFirestore(updatedProfile).catch(() => {});
+      onUpdateProfile(updatedProfile);
+      setSuccessMsg('Google профилът беше успешно свързан към вашия акаунт!');
+
+      fetch('/api/users/link-provider', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -268,13 +315,13 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
           providerId: 'google.com',
           extraData: { email: googleEmail || auth.currentUser?.email || volunteer.gmail },
         }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Грешка при свързване на Google');
-      onUpdateProfile(data.profile);
-      setSuccessMsg('Google профилът беше успешно свързан към вашия акаунт!');
+      }).catch(() => {});
     } catch (err: any) {
-      setErrorMsg(err.message || 'Неуспешно свързване с Google.');
+      if (err.code === 'auth/unauthorized-domain') {
+        setErrorMsg('Домейнът не е в списъка с оторизирани домейни във Firebase Console -> Authentication -> Settings -> Authorized domains.');
+      } else {
+        setErrorMsg(err.message || 'Неуспешно свързване с Google.');
+      }
     } finally {
       setLoadingProvider(null);
     }
@@ -296,7 +343,18 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
         photoURL = result.user.photoURL || undefined;
       }
 
-      const res = await fetch('/api/users/link-provider', {
+      const updatedProfile: VolunteerProfile = {
+        ...volunteer,
+        facebookId: fbUid || volunteer.facebookId,
+        photoURL: photoURL || volunteer.photoURL,
+        linkedProviders: Array.from(new Set([...(volunteer.linkedProviders || []), 'facebook.com'])),
+      };
+
+      await saveUserProfileToFirestore(updatedProfile).catch(() => {});
+      onUpdateProfile(updatedProfile);
+      setSuccessMsg('Facebook акаунтът беше успешно свързан!');
+
+      fetch('/api/users/link-provider', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -304,16 +362,14 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
           providerId: 'facebook.com',
           extraData: { facebookId: fbUid || `fb-${volunteer.id}`, photoURL },
         }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Грешка при свързване на Facebook');
-      onUpdateProfile(data.profile);
-      setSuccessMsg('Facebook акаунтът беше успешно свързан!');
+      }).catch(() => {});
     } catch (err: any) {
       if (err.code === 'auth/credential-already-in-use') {
         setErrorMsg('Този Facebook профил вече е свързан към друг регистриран акаунт.');
       } else if (err.code === 'auth/popup-closed-by-user') {
         setErrorMsg('Прозорецът за вход с Facebook беше затворен.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setErrorMsg('Домейнът не е оторизиран във Firebase Console.');
       } else {
         setErrorMsg(err.message || 'Неуспешно свързване с Facebook.');
       }

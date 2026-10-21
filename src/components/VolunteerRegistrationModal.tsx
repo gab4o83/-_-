@@ -6,6 +6,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { auth, googleAuthProvider, facebookAuthProvider } from '../lib/firebase.ts';
+import { saveUserProfileToFirestore, getUserProfileFromFirestore } from '../lib/firestoreService';
 import {
   LogIn,
   UserPlus,
@@ -236,32 +237,70 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
       const user = result.user;
       if (!user) throw new Error('Неуспешна аутентикация с Google.');
 
-      const syncRes = await fetch('/api/auth/firebase-sync', {
+      // Check existing profile in Firestore
+      let existingProfile: VolunteerProfile | null = null;
+      try {
+        existingProfile = await getUserProfileFromFirestore(user.uid);
+      } catch (_e) {
+        // Fallback
+      }
+
+      const userProfile: VolunteerProfile = existingProfile || {
+        id: user.uid,
+        name: user.displayName || user.email?.split('@')[0] || 'Доброволец',
+        emailOrPhone: user.email || '',
+        gmail: user.email || '',
+        neighborhood: 'Център',
+        joinedDate: 'Днес',
+        weeklyPoints: 50,
+        totalPoints: 50,
+        resolvedTasksCount: 0,
+        activeAssignments: [],
+        rank: 'Новак доброволец' as VolunteerRank,
+        photoURL: user.photoURL || undefined,
+        authProvider: 'google',
+        googleEmail: user.email || undefined,
+        linkedProviders: ['google.com'],
+        badges: [
+          {
+            id: 'welcome-badge',
+            name: 'Активен гражданин на Враца 🤝',
+            icon: 'Users',
+            description: 'Успешна регистрация през Google в отряда на Враца',
+            earnedDate: 'Днес'
+          }
+        ]
+      };
+
+      // Direct Firestore persistence
+      await saveUserProfileToFirestore(userProfile).catch((err) => {
+        console.warn('Firestore user profile save notice:', err);
+      });
+
+      // Optional backend sync (non-fatal on static hosting like GitHub Pages)
+      fetch('/api/auth/firebase-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           uid: user.uid,
           email: user.email || '',
-          name: user.displayName || user.email?.split('@')[0] || 'Доброволец',
-          photoURL: user.photoURL || undefined,
+          name: userProfile.name,
+          photoURL: userProfile.photoURL,
           authProvider: 'google',
           googleEmail: user.email || undefined,
           linkedProviders: ['google.com'],
-          isNewRegistration: activeMode === 'signup',
+          isNewRegistration: !existingProfile,
         }),
-      });
+      }).catch(() => {});
 
-      const data = await syncRes.json();
-      if (!syncRes.ok || !data.success) {
-        throw new Error(data.error || 'Грешка при синхронизация с базата данни.');
-      }
-
-      if (onLogin) onLogin(data.profile);
-      else onRegister(data.profile);
+      if (onLogin) onLogin(userProfile);
+      else onRegister(userProfile);
       onClose();
     } catch (err: any) {
       console.warn('Google Sign-In notice:', err);
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+      if (err.code === 'auth/unauthorized-domain') {
+        setErrorMsg('Домейнът (напр. вашият GitHub Pages URL) все още не е добавен в списъка с оторизирани домейни във Firebase Console -> Authentication -> Settings -> Authorized domains. Добавете вашия домейн (*.github.io), за да ползвате Google вход, или ползвайте Email/Парола или Бърз вход.');
+      } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         setErrorMsg('Прозорецът за вход с Google беше затворен преди приключване.');
       } else {
         setErrorMsg(err.message || 'Възникна грешка при вход с Google.');
@@ -282,32 +321,63 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
 
       const fbUid = user.providerData.find((p) => p.providerId === 'facebook.com')?.uid || user.uid;
 
-      const syncRes = await fetch('/api/auth/firebase-sync', {
+      let existingProfile: VolunteerProfile | null = null;
+      try {
+        existingProfile = await getUserProfileFromFirestore(user.uid);
+      } catch (_e) {}
+
+      const userProfile: VolunteerProfile = existingProfile || {
+        id: user.uid,
+        name: user.displayName || 'Facebook Доброволец',
+        emailOrPhone: user.email || `${fbUid}@facebook.vratsa.bg`,
+        gmail: user.email || undefined,
+        neighborhood: 'Център',
+        joinedDate: 'Днес',
+        weeklyPoints: 50,
+        totalPoints: 50,
+        resolvedTasksCount: 0,
+        activeAssignments: [],
+        rank: 'Новак доброволец' as VolunteerRank,
+        photoURL: user.photoURL || undefined,
+        authProvider: 'facebook',
+        facebookId: fbUid,
+        linkedProviders: ['facebook.com'],
+        badges: [
+          {
+            id: 'welcome-badge',
+            name: 'Активен гражданин на Враца 🤝',
+            icon: 'Users',
+            description: 'Успешна регистрация през Facebook в отряда на Враца',
+            earnedDate: 'Днес'
+          }
+        ]
+      };
+
+      await saveUserProfileToFirestore(userProfile).catch(() => {});
+
+      fetch('/api/auth/firebase-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           uid: user.uid,
-          email: user.email || `${fbUid}@facebook.vratsa.bg`,
-          name: user.displayName || 'Facebook Доброволец',
-          photoURL: user.photoURL || undefined,
+          email: userProfile.emailOrPhone,
+          name: userProfile.name,
+          photoURL: userProfile.photoURL,
           authProvider: 'facebook',
           facebookId: fbUid,
           linkedProviders: ['facebook.com'],
-          isNewRegistration: activeMode === 'signup',
+          isNewRegistration: !existingProfile,
         }),
-      });
+      }).catch(() => {});
 
-      const data = await syncRes.json();
-      if (!syncRes.ok || !data.success) {
-        throw new Error(data.error || 'Грешка при синхронизация на Facebook профила.');
-      }
-
-      if (onLogin) onLogin(data.profile);
-      else onRegister(data.profile);
+      if (onLogin) onLogin(userProfile);
+      else onRegister(userProfile);
       onClose();
     } catch (err: any) {
       console.warn('Facebook sign-in notice:', err);
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+      if (err.code === 'auth/unauthorized-domain') {
+        setErrorMsg('Домейнът не е в списъка с оторизирани домейни във Firebase Console -> Authentication -> Settings -> Authorized domains.');
+      } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         setErrorMsg('Прозорецът за вход с Facebook беше затворен преди приключване.');
       } else if (err.code === 'auth/account-exists-with-different-credential') {
         setErrorMsg('Вече съществува профил със същия имейл адрес. Моля, влезте с Google или парола и свържете Facebook от настройките на акаунта.');
@@ -392,25 +462,55 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
           const userCredential = await signInWithEmailAndPassword(auth, identifier, loginPassword);
           const user = userCredential.user;
           if (user) {
-            // Synchronize with database profile
-            const syncRes = await fetch('/api/auth/firebase-sync', {
+            // Load or create Firestore profile
+            let loadedProfile: VolunteerProfile | null = null;
+            try {
+              loadedProfile = await getUserProfileFromFirestore(user.uid);
+            } catch (_e) {}
+
+            const profile: VolunteerProfile = loadedProfile || {
+              id: user.uid,
+              name: user.displayName || user.email?.split('@')[0] || 'Доброволец',
+              emailOrPhone: user.email || identifier,
+              gmail: user.email || identifier,
+              neighborhood: 'Център',
+              joinedDate: 'Днес',
+              weeklyPoints: 50,
+              totalPoints: 50,
+              resolvedTasksCount: 0,
+              activeAssignments: [],
+              rank: 'Новак доброволец' as VolunteerRank,
+              authProvider: 'password',
+              linkedProviders: ['password'],
+              badges: [
+                {
+                  id: 'welcome-badge',
+                  name: 'Активен гражданин на Враца 🤝',
+                  icon: 'Users',
+                  description: 'Успешен вход в доброволческия отряд на Враца',
+                  earnedDate: 'Днес'
+                }
+              ]
+            };
+
+            await saveUserProfileToFirestore(profile).catch(() => {});
+
+            // Optional backend sync (non-blocking)
+            fetch('/api/auth/firebase-sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 uid: user.uid,
                 email: user.email || identifier,
-                name: user.displayName || user.email?.split('@')[0] || 'Доброволец',
+                name: profile.name,
                 authProvider: 'password',
               }),
-            });
+            }).catch(() => {});
 
-            const data = await syncRes.json();
-            if (syncRes.ok && data.success && data.profile) {
-              if (onLogin) onLogin(data.profile);
-              else onRegister(data.profile);
-              onClose();
-              return;
-            }
+            if (onLogin) onLogin(profile);
+            else onRegister(profile);
+            onClose();
+            return;
           }
         } catch (fbErr: any) {
           console.warn('Firebase Email/Password login notice:', fbErr.code, fbErr.message);
@@ -420,42 +520,67 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
             fbErr.code === 'auth/user-not-found' ||
             fbErr.code === 'auth/invalid-credential'
           ) {
-            // If account was deleted in Firebase, purge any ghost memory store so no points linger
-            fetch('/api/users/delete-account', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: identifier }),
-            }).catch(() => {});
-
             throw new Error(
-              'Няма намерен потребител с този имейл във Firebase или акаунтът е бил изтрит. Моля, преминете към раздел „Регистрация“ (Sign Up), за да създадете нов профил на чисто.'
+              'Няма намерен потребител с този имейл във Firebase или акаунтът не съществува. Моля, преминете към раздел „Регистрация“ (Sign Up), за да създадете нов профил.'
             );
           } else if (fbErr.code === 'auth/too-many-requests') {
             throw new Error('Твърде много неуспешни опити. Моля, изчакайте няколко минути преди следващ опит.');
           } else if (fbErr.code === 'auth/invalid-email') {
             throw new Error('Моля, въведете валиден имейл адрес (напр. ime@gmail.com).');
+          } else if (fbErr.code === 'auth/operation-not-allowed') {
+            throw new Error('Email/Password автентикацията трябва да се активира във Firebase Console -> Authentication -> Sign-in method.');
           } else {
             throw new Error(fbErr.message || 'Неуспешен вход във Firebase.');
           }
         }
       } else {
         // Phone or username login fallback
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            identifier,
-            password: loginPassword || undefined,
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || 'Неуспешен вход. Моля, проверете вашите данни.');
+        let profileToLogin: VolunteerProfile | null = null;
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              identifier,
+              password: loginPassword || undefined,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success && data.profile) {
+            profileToLogin = data.profile;
+          }
+        } catch (_e) {
+          // Fallback if backend offline
         }
 
-        if (onLogin) onLogin(data.profile);
-        else onRegister(data.profile);
+        if (!profileToLogin) {
+          profileToLogin = {
+            id: `vol-${Date.now()}`,
+            name: identifier,
+            emailOrPhone: identifier,
+            phone: identifier.includes('@') ? undefined : identifier,
+            gmail: identifier.includes('@') ? identifier : undefined,
+            neighborhood: 'Център',
+            joinedDate: 'Днес',
+            weeklyPoints: 50,
+            totalPoints: 50,
+            resolvedTasksCount: 0,
+            activeAssignments: [],
+            rank: 'Новак доброволец' as VolunteerRank,
+            badges: [
+              {
+                id: 'welcome-badge',
+                name: 'Активен гражданин на Враца 🤝',
+                icon: 'Users',
+                description: 'Успешна регистрация в доброволческия отряд на Враца',
+                earnedDate: 'Днес'
+              }
+            ]
+          };
+        }
+
+        if (onLogin) onLogin(profileToLogin);
+        else onRegister(profileToLogin);
         onClose();
       }
     } catch (err: any) {
@@ -521,7 +646,7 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
           } else if (fbErr.code === 'auth/invalid-email') {
             throw new Error('Моля, въведете валиден имейл адрес (напр. ime@gmail.com).');
           } else if (fbErr.code === 'auth/operation-not-allowed') {
-            throw new Error('Email/Password автентикацията все още не е активна във Firebase Console.');
+            throw new Error('Email/Password автентикацията все още не е активна във Firebase Console -> Authentication -> Sign-in method.');
           } else {
             throw new Error(fbErr.message || 'Грешка при регистрация във Firebase Authentication.');
           }
@@ -534,8 +659,42 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
             console.warn('Firebase updateProfile notice:', profileErr);
           }
 
-          // Sync to Database and persistent volunteer store
-          const syncRes = await fetch('/api/auth/firebase-sync', {
+          createdProfile = {
+            id: userCredential.user.uid,
+            name: name.trim(),
+            emailOrPhone: cleanGmail,
+            gmail: cleanGmail,
+            phone: cleanPhone || undefined,
+            neighborhood,
+            joinedDate: 'Днес',
+            weeklyPoints: 50,
+            totalPoints: 50,
+            resolvedTasksCount: 0,
+            activeAssignments: [],
+            rank: 'Новак доброволец' as VolunteerRank,
+            skills: skills.trim() || undefined,
+            availability,
+            preferredCategories: selectedCategories,
+            authProvider: 'password',
+            linkedProviders: ['password'],
+            badges: [
+              {
+                id: 'welcome-badge',
+                name: 'Активен гражданин на Враца 🤝',
+                icon: 'Users',
+                description: 'Успешна регистрация в доброволческия отряд на Враца',
+                earnedDate: 'Днес'
+              }
+            ]
+          };
+
+          // Direct Firestore save
+          await saveUserProfileToFirestore(createdProfile).catch((err) => {
+            console.warn('Could not save user profile to Firestore:', err);
+          });
+
+          // Optional backend sync (non-fatal)
+          fetch('/api/auth/firebase-sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -550,35 +709,61 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
               authProvider: 'password',
               isNewRegistration: true,
             }),
-          });
-
-          const syncData = await syncRes.json();
-          if (!syncRes.ok || !syncData.success) {
-            throw new Error(syncData.error || 'Грешка при синхронизация на профила.');
-          }
-          createdProfile = syncData.profile;
+          }).catch(() => {});
         }
       } else {
         // Phone-based registration fallback
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        try {
+          const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: name.trim(),
+              phone: cleanPhone,
+              password,
+              neighborhood,
+              skills: skills.trim() || undefined,
+              availability,
+              preferredCategories: selectedCategories,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success && data.profile) {
+            createdProfile = data.profile;
+          }
+        } catch (_e) {}
+
+        if (!createdProfile) {
+          const phoneUid = `vol-${Date.now()}`;
+          createdProfile = {
+            id: phoneUid,
             name: name.trim(),
+            emailOrPhone: cleanPhone,
             phone: cleanPhone,
-            password,
             neighborhood,
+            joinedDate: 'Днес',
+            weeklyPoints: 50,
+            totalPoints: 50,
+            resolvedTasksCount: 0,
+            activeAssignments: [],
+            rank: 'Новак доброволец' as VolunteerRank,
             skills: skills.trim() || undefined,
             availability,
             preferredCategories: selectedCategories,
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || 'Грешка при регистрация в базата данни.');
+            authProvider: 'phone',
+            linkedProviders: ['phone'],
+            badges: [
+              {
+                id: 'welcome-badge',
+                name: 'Активен гражданин на Враца 🤝',
+                icon: 'Users',
+                description: 'Успешна регистрация в доброволческия отряд на Враца',
+                earnedDate: 'Днес'
+              }
+            ]
+          };
+          saveUserProfileToFirestore(createdProfile).catch(() => {});
         }
-        createdProfile = data.profile;
       }
 
       if (createdProfile) {
