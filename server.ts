@@ -13,7 +13,7 @@ const app = express();
 // In AI Studio / Cloud Run, NGINX runs on port 8080 and proxies traffic to port 3000.
 // Therefore, the Node / Express dev server MUST always listen on port 3000.
 const portArgIndex = process.argv.indexOf('--port');
-const PORT = portArgIndex !== -1 ? Number(process.argv[portArgIndex + 1]) : 3000;
+const PORT = portArgIndex !== -1 ? Number(process.argv[portArgIndex + 1]) : Number(process.env.PORT || 3000);
 
 app.use(express.json({ limit: '35mb' }));
 

@@ -1,23 +1,27 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, FacebookAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import firebaseConfig from '../../firebase-applet-config.json';
+import rawConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const firebaseConfig = rawConfig || {};
+
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const googleAuthProvider = new GoogleAuthProvider();
 export const facebookAuthProvider = new FacebookAuthProvider();
-export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
+export const db = (firebaseConfig as any)?.firestoreDatabaseId
+  ? getFirestore(app, (firebaseConfig as any).firestoreDatabaseId)
+  : getFirestore(app);
 export const storage = getStorage(app);
 
-async function testConnection() {
+// Non-blocking connection test
+setTimeout(async () => {
   try {
-    await getDocFromServer(doc(db, 'reports', 'rep-01'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
+    if (db) {
+      await getDocFromServer(doc(db, 'reports', 'rep-01'));
     }
+  } catch (_e) {
+    // Graceful offline handling
   }
-}
-testConnection();
+}, 200);
