@@ -230,9 +230,9 @@ export const VratsaInteractiveMap: React.FC<VratsaInteractiveMapProps> = ({
 
     // 2. Path quick filter
     if (filterPath === 'solved' && r.status !== 'решен') return false;
-    if (filterPath === 'red' && (r.analysis.path !== 'red' || r.status === 'решен')) return false;
-    if (filterPath === 'yellow' && (r.analysis.path !== 'yellow' || r.status === 'решен')) return false;
-    if (filterPath === 'blue' && (r.analysis.path !== 'blue' || r.status === 'решен')) return false;
+    if (filterPath === 'red' && ((r.analysis?.path || 'blue') !== 'red' || r.status === 'решен')) return false;
+    if (filterPath === 'yellow' && ((r.analysis?.path || 'blue') !== 'yellow' || r.status === 'решен')) return false;
+    if (filterPath === 'blue' && ((r.analysis?.path || 'blue') !== 'blue' || r.status === 'решен')) return false;
 
     // 3. Category dropdown filter
     if (!matchesCategory(r, filterCategory)) return false;
@@ -775,11 +775,11 @@ export const VratsaInteractiveMap: React.FC<VratsaInteractiveMapProps> = ({
                 pinBg = '#10B981';
                 pinBorder = '#047857';
                 glyphText = '✓';
-              } else if (report.analysis.path === 'red') {
+              } else if (report.analysis?.path === 'red') {
                 pinBg = '#EF4444';
                 pinBorder = '#B91C1C';
                 glyphText = '⚠';
-              } else if (report.analysis.path === 'yellow') {
+              } else if (report.analysis?.path === 'yellow') {
                 pinBg = '#F59E0B';
                 pinBorder = '#B45309';
                 glyphText = '🛠';
@@ -929,14 +929,14 @@ export const VratsaInteractiveMap: React.FC<VratsaInteractiveMapProps> = ({
                 </span>
                 <span
                   className={`font-mono font-bold tabular-nums ${
-                    activePopupReport.analysis.urgencyScore >= 80
+                    (activePopupReport.analysis?.urgencyScore ?? 50) >= 80
                       ? 'text-red-400'
-                      : activePopupReport.analysis.urgencyScore >= 50
+                      : (activePopupReport.analysis?.urgencyScore ?? 50) >= 50
                       ? 'text-amber-400'
                       : 'text-blue-400'
                   }`}
                 >
-                  {activePopupReport.analysis.urgencyScore}/100
+                  {activePopupReport.analysis?.urgencyScore ?? 50}/100
                 </span>
               </div>
 
@@ -969,15 +969,15 @@ export const VratsaInteractiveMap: React.FC<VratsaInteractiveMapProps> = ({
                 <div className="text-slate-400 text-[11px]">
                   Път:{' '}
                   <strong className="text-slate-200">
-                    {activePopupReport.analysis.path === 'blue' &&
+                    {(activePopupReport.analysis?.path === 'blue' || !activePopupReport.analysis?.path) &&
                       'Гражданска инициатива (Безопасно за доброволци)'}
-                    {activePopupReport.analysis.path === 'yellow' &&
+                    {activePopupReport.analysis?.path === 'yellow' &&
                       'Община + Граждани (Нужни са летви/материали)'}
-                    {activePopupReport.analysis.path === 'red' &&
+                    {activePopupReport.analysis?.path === 'red' &&
                       'Само компетентна служба (Аварийно/Опасно)'}
                   </strong>
                 </div>
-                {activePopupReport.analysis.path !== 'red' && (
+                {activePopupReport.analysis?.path !== 'red' && (
                   <div className="text-[11px] text-slate-400">
                     Доброволци:{' '}
                     <span className="font-semibold text-emerald-400">
@@ -1005,7 +1005,7 @@ export const VratsaInteractiveMap: React.FC<VratsaInteractiveMapProps> = ({
             {/* Bottom action buttons */}
             <div className="pt-3 border-t border-slate-800 space-y-2">
               {activePopupReport.status !== 'решен' &&
-                activePopupReport.analysis.path !== 'red' && (
+                activePopupReport.analysis?.path !== 'red' && (
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => {

@@ -79,7 +79,7 @@ export const ResolutionModal: React.FC<ResolutionModalProps> = ({
           afterImageUrl: resolvedImage,
           taskTitle: report.title,
           taskDescription: report.description,
-          category: report.analysis.category,
+          category: report.analysis?.category || 'Друго',
           timeSpentHours: Number(timeSpentHours),
           volunteerName: volunteerInputName
         })

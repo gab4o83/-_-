@@ -12,7 +12,8 @@ import {
   saveReportToFirestore,
   updateReportInFirestore,
   saveUserProfileToFirestore,
-  addPointsToVolunteerInFirestore
+  addPointsToVolunteerInFirestore,
+  sanitizeReport
 } from './lib/firestoreService';
 import { Header } from './components/Header';
 import { VratsaInteractiveMap } from './components/VratsaInteractiveMap';
@@ -53,7 +54,9 @@ export default function App() {
       const saved = localStorage.getItem('vratsa_civic_reports');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(sanitizeReport);
+        }
       }
     } catch (e) {
       console.warn('Could not read saved reports from localStorage:', e);
