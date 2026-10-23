@@ -20,6 +20,7 @@ import {
 import { VolunteerProfile, LeaderboardUser } from '../types';
 import { fetchLeaderboardFromFirestore } from '../lib/firestoreService';
 import { MOCK_LEADERBOARD_VOLUNTEERS, VRATSA_DISTRICTS } from '../data/mockReports';
+import { LOGO_PATH, handleImageError } from '../constants/assets';
 
 interface VolunteerLeaderboardSectionProps {
   currentVolunteer: VolunteerProfile | null;
@@ -184,10 +185,11 @@ export const VolunteerLeaderboardSection: React.FC<VolunteerLeaderboardSectionPr
           <div className="flex items-start sm:items-center gap-4 max-w-xl">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-white border-2 border-amber-400/80 shadow-2xl p-1 shrink-0">
               <img
-                src="/logo.png"
+                src={LOGO_PATH}
                 alt="Доброволци Враца - Платформа на ПТГ Н. Й. Вапцаров"
                 className="w-full h-full object-contain rounded-full"
                 referrerPolicy="no-referrer"
+                onError={handleImageError}
               />
             </div>
             <div className="space-y-1.5">

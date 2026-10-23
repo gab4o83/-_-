@@ -8,6 +8,7 @@ import {
 } from '@vis.gl/react-google-maps';
 import { ReportItem } from '../types';
 import { VRATSA_DISTRICTS } from '../data/mockReports';
+import { VratsaLeafletMap } from './VratsaLeafletMap';
 import {
   MapPin,
   Flame,
@@ -88,7 +89,13 @@ export const VratsaInteractiveMap: React.FC<VratsaInteractiveMapProps> = ({
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
-  const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) || 'AIzaSyBYIA0EjWOSZFEyy_BoTyVbZgirxX_nXvk';
+  // Google Maps Platform API key from secrets / env
+  const rawApiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string) || '';
+  const apiKey = rawApiKey.trim();
+
+  // If no Google Maps API key is configured or if loading fails, use the OpenStreetMap Leaflet engine
+  const [mapLoadFailed, setMapLoadFailed] = useState<boolean>(!apiKey);
+  const [mapEngine, setMapEngine] = useState<'google' | 'osm'>(() => (apiKey ? 'google' : 'osm'));
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -729,96 +736,136 @@ export const VratsaInteractiveMap: React.FC<VratsaInteractiveMapProps> = ({
         </div>
       )}
 
-      {/* Main Google Map Box */}
+      {/* Main Map Box */}
       <div className="relative rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-slate-950 h-[480px] lg:h-[540px]">
-        <APIProvider apiKey={apiKey} libraries={['marker']}>
-          <Map
-            style={{ width: '100%', height: '100%' }}
-            defaultCenter={{ lat: 43.2047, lng: 23.5477 }}
-            defaultZoom={13.5}
-            mapId="DEMO_MAP_ID"
-            internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-            gestureHandling="greedy"
-            disableDefaultUI={false}
-            onClick={handleMapClick}
+        {apiKey && !mapLoadFailed && mapEngine === 'google' ? (
+          <APIProvider
+            apiKey={apiKey}
+            libraries={['marker']}
+            onError={(err) => {
+              console.warn('Google Maps API failed to load, switching to OpenStreetMap layer.', err);
+              setMapLoadFailed(true);
+              setMapEngine('osm');
+            }}
           >
-            <MapCameraController
-              targetDistrict={targetDistrict}
-              selectedReportCoords={selectedReportCoords}
-            />
+            <Map
+              style={{ width: '100%', height: '100%' }}
+              defaultCenter={{ lat: 43.2047, lng: 23.5477 }}
+              defaultZoom={13.5}
+              mapId="DEMO_MAP_ID"
+              internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+              gestureHandling="greedy"
+              disableDefaultUI={false}
+              onClick={handleMapClick}
+            >
+              <MapCameraController
+                targetDistrict={targetDistrict}
+                selectedReportCoords={selectedReportCoords}
+              />
 
-            {/* Dropped Pin from User Click */}
-            {droppedPinCoords && (
-              <AdvancedMarker position={droppedPinCoords} title="Посочена нова локация за сигнал">
-                <Pin
-                  background="#10B981"
-                  borderColor="#065F46"
-                  glyphColor="#FFFFFF"
-                  scale={1.3}
-                >
-                  <span className="text-xs font-bold text-white">+</span>
-                </Pin>
-              </AdvancedMarker>
-            )}
-
-            {/* Reports Markers with AdvancedMarker */}
-            {filteredReports.map((report) => {
-              const lat = report.coordinates?.lat || 43.2047;
-              const lng = report.coordinates?.lng || 23.5477;
-              const isSelected = selectedReportId === report.id;
-
-              let pinBg = '#3B82F6';
-              let pinBorder = '#1D4ED8';
-              let glyphText = '🔵';
-
-              if (report.status === 'решен') {
-                pinBg = '#10B981';
-                pinBorder = '#047857';
-                glyphText = '✓';
-              } else if (report.analysis?.path === 'red') {
-                pinBg = '#EF4444';
-                pinBorder = '#B91C1C';
-                glyphText = '⚠';
-              } else if (report.analysis?.path === 'yellow') {
-                pinBg = '#F59E0B';
-                pinBorder = '#B45309';
-                glyphText = '🛠';
-              }
-
-              return (
-                <AdvancedMarker
-                  key={report.id}
-                  position={{ lat, lng }}
-                  onClick={() => {
-                    setActivePopupReport(report);
-                    onSelectReport(report.id);
-                  }}
-                  title={`${report.ticketNumber}: ${report.title}`}
-                >
+              {/* Dropped Pin from User Click */}
+              {droppedPinCoords && (
+                <AdvancedMarker position={droppedPinCoords} title="Посочена нова локация за сигнал">
                   <Pin
-                    background={pinBg}
-                    borderColor={isSelected ? '#FFFFFF' : pinBorder}
+                    background="#10B981"
+                    borderColor="#065F46"
                     glyphColor="#FFFFFF"
-                    scale={isSelected ? 1.35 : 1.1}
+                    scale={1.3}
                   >
-                    <span className="text-[11px] font-bold text-white">{glyphText}</span>
+                    <span className="text-xs font-bold text-white">+</span>
                   </Pin>
                 </AdvancedMarker>
-              );
-            })}
-          </Map>
-        </APIProvider>
+              )}
+
+              {/* Reports Markers with AdvancedMarker */}
+              {filteredReports.map((report) => {
+                const lat = report.coordinates?.lat || 43.2047;
+                const lng = report.coordinates?.lng || 23.5477;
+                const isSelected = selectedReportId === report.id;
+
+                let pinBg = '#3B82F6';
+                let pinBorder = '#1D4ED8';
+                let glyphText = '🔵';
+
+                if (report.status === 'решен') {
+                  pinBg = '#10B981';
+                  pinBorder = '#047857';
+                  glyphText = '✓';
+                } else if (report.analysis?.path === 'red') {
+                  pinBg = '#EF4444';
+                  pinBorder = '#B91C1C';
+                  glyphText = '⚠';
+                } else if (report.analysis?.path === 'yellow') {
+                  pinBg = '#F59E0B';
+                  pinBorder = '#B45309';
+                  glyphText = '🛠';
+                }
+
+                return (
+                  <AdvancedMarker
+                    key={report.id}
+                    position={{ lat, lng }}
+                    onClick={() => {
+                      setActivePopupReport(report);
+                      onSelectReport(report.id);
+                    }}
+                    title={`${report.ticketNumber}: ${report.title}`}
+                  >
+                    <Pin
+                      background={pinBg}
+                      borderColor={isSelected ? '#FFFFFF' : pinBorder}
+                      glyphColor="#FFFFFF"
+                      scale={isSelected ? 1.35 : 1.1}
+                    >
+                      <span className="text-[11px] font-bold text-white">{glyphText}</span>
+                    </Pin>
+                  </AdvancedMarker>
+                );
+              })}
+            </Map>
+          </APIProvider>
+        ) : (
+          <VratsaLeafletMap
+            reports={filteredReports}
+            selectedReportId={selectedReportId}
+            targetDistrict={targetDistrict}
+            selectedReportCoords={selectedReportCoords}
+            droppedPinCoords={droppedPinCoords}
+            onSelectReport={onSelectReport}
+            onMarkerClick={(report) => {
+              setActivePopupReport(report);
+            }}
+            onMapClickNewSignal={(coords) => {
+              setDroppedPinCoords({ lat: coords.lat, lng: coords.lng });
+              if (onMapClickNewSignal) onMapClickNewSignal(coords);
+            }}
+          />
+        )}
 
         {/* Legend Overlay at Top Left */}
         <div className="absolute top-3 left-3 z-10 bg-slate-900/90 backdrop-blur-md border border-slate-800/80 rounded-xl px-3 py-2 text-xs shadow-lg space-y-1.5 pointer-events-auto max-w-[260px] sm:max-w-none">
           <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between gap-3">
             <span className="flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-              Google Maps · Враца
+              {apiKey && !mapLoadFailed && mapEngine === 'google'
+                ? 'Google Maps · Враца'
+                : 'Интерактивна карта · Враца'}
             </span>
-            <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30">
-              {filteredReports.length} {filteredReports.length === 1 ? 'сигнал' : 'сигнала'}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {apiKey && !mapLoadFailed && (
+                <button
+                  type="button"
+                  onClick={() => setMapEngine(mapEngine === 'google' ? 'osm' : 'google')}
+                  className="text-[9px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-mono border border-slate-700 transition"
+                  title="Превключи между Google Maps и OpenStreetMap"
+                >
+                  {mapEngine === 'google' ? 'Към OSM' : 'Към Google'}
+                </button>
+              )}
+              <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                {filteredReports.length} {filteredReports.length === 1 ? 'сигнал' : 'сигнала'}
+              </span>
+            </div>
           </div>
           <div className="flex flex-col gap-1 text-[11px] text-slate-400">
             <span className="flex items-center gap-1.5">

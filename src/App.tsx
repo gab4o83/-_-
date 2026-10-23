@@ -27,6 +27,7 @@ import { VolunteerRegistrationModal } from './components/VolunteerRegistrationMo
 import { VolunteerProfileDashboard } from './components/VolunteerProfileDashboard';
 import { INITIAL_REPORTS } from './data/mockReports';
 import { ReportItem, VolunteerProfile } from './types';
+import { LOGO_PATH, handleImageError } from './constants/assets';
 import {
   Building2,
   Heart,
@@ -113,7 +114,10 @@ export default function App() {
 
     // 3. Fallback check to /api/reports if Express server is running
     fetch('/api/reports')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) return [];
+        return res.json();
+      })
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setReports(data);
@@ -516,10 +520,11 @@ export default function App() {
               <div className="flex items-start sm:items-center gap-4">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-white border-2 border-emerald-400/80 shadow-2xl p-1 shrink-0">
                   <img
-                    src="/logo.png"
+                    src={LOGO_PATH}
                     alt="Умна Враца - Платформа на ПТГ Н. Й. Вапцаров"
                     className="w-full h-full object-contain rounded-full"
                     referrerPolicy="no-referrer"
+                    onError={handleImageError}
                   />
                 </div>
                 <div className="space-y-1">
@@ -823,10 +828,11 @@ export default function App() {
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full overflow-hidden bg-white p-0.5 border-2 border-emerald-400/80 shadow-md shrink-0">
                 <img
-                  src="/logo.png"
+                  src={LOGO_PATH}
                   alt="Умна Враца - ПТГ Н. Й. Вапцаров"
                   className="w-full h-full object-contain rounded-full"
                   referrerPolicy="no-referrer"
+                  onError={handleImageError}
                 />
               </div>
               <div>

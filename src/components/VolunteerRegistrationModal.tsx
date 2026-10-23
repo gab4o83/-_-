@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { VolunteerProfile, VolunteerRank } from '../types.ts';
 import { VRATSA_DISTRICTS } from '../data/mockReports.ts';
+import { LOGO_PATH, handleImageError } from '../constants/assets';
 
 interface VolunteerRegistrationModalProps {
   isOpen: boolean;
@@ -164,6 +165,10 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/auth/validate-email?email=${encodeURIComponent(clean)}`);
+        if (!res.ok) {
+          setEmailValidationState({ status: 'idle' });
+          return;
+        }
         const data = await res.json();
         if (data.valid) {
           setEmailValidationState({
@@ -545,9 +550,11 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
               password: loginPassword || undefined,
             }),
           });
-          const data = await res.json();
-          if (res.ok && data.success && data.profile) {
-            profileToLogin = data.profile;
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.profile) {
+              profileToLogin = data.profile;
+            }
           }
         } catch (_e) {
           // Fallback if backend offline
@@ -727,9 +734,11 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
               preferredCategories: selectedCategories,
             }),
           });
-          const data = await res.json();
-          if (res.ok && data.success && data.profile) {
-            createdProfile = data.profile;
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.profile) {
+              createdProfile = data.profile;
+            }
           }
         } catch (_e) {}
 
@@ -864,9 +873,10 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
             <div className="flex items-center gap-3.5 border-b border-slate-800 pb-4">
               <div className="w-12 h-12 rounded-full overflow-hidden bg-white border-2 border-emerald-400 p-0.5 shrink-0 shadow-lg shadow-emerald-950/50">
                 <img
-                  src="/logo.png"
+                  src={LOGO_PATH}
                   alt="Доброволци Враца"
                   className="w-full h-full object-contain rounded-full"
+                  onError={handleImageError}
                 />
               </div>
               <div>
@@ -1069,9 +1079,10 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
             <div className="flex items-center gap-3.5 border-b border-slate-800 pb-3">
               <div className="w-12 h-12 rounded-full overflow-hidden bg-white border-2 border-emerald-400 p-0.5 shrink-0 shadow-lg shadow-emerald-950/50">
                 <img
-                  src="/logo.png"
+                  src={LOGO_PATH}
                   alt="Доброволци Враца"
                   className="w-full h-full object-contain rounded-full"
+                  onError={handleImageError}
                 />
               </div>
               <div>
@@ -1437,9 +1448,10 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full overflow-hidden bg-white border-2 border-emerald-400 p-0.5 shrink-0 shadow-md">
                     <img
-                      src="/logo.png"
+                      src={LOGO_PATH}
                       alt="Доброволци Враца"
                       className="w-full h-full object-contain rounded-full"
+                      onError={handleImageError}
                     />
                   </div>
                   <div>

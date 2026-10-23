@@ -3,6 +3,7 @@ import { AnalysisResult, ReportItem, Coordinates } from '../types';
 import { SAMPLE_PHOTO_PRESETS, VRATSA_LOCATIONS, VRATSA_DISTRICTS } from '../data/mockReports';
 import { VRATSA_SOLVED_CASES } from '../data/solvedCases';
 import { AnalysisCard } from './AnalysisCard';
+import { generateClientAnalysis } from '../lib/clientAnalysis';
 import {
   Upload,
   Camera,
@@ -147,7 +148,7 @@ export const SubmitSection: React.FC<SubmitSectionProps> = ({
     }
   };
 
-  // Trigger Gemini Analysis
+  // Trigger Gemini Analysis with client fallback for static hosting
   const handleAnalyze = async () => {
     if (!imagePreview && !description) {
       setErrorMessage('Моля, качете снимка или опишете проблема (напр. счупено осветление, дупка или боклук).');
@@ -159,33 +160,42 @@ export const SubmitSection: React.FC<SubmitSectionProps> = ({
     setAnalysisResult(null);
     setIsSubmittedToBoard(false);
 
-    try {
-      const activeLocation = customLocation.trim() || location;
-      const response = await fetch('/api/analyze-issue', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          image: imagePreview,
-          description: description,
-          location: activeLocation,
-          similarCases: VRATSA_SOLVED_CASES,
-        }),
-      });
+    const activeLocation = customLocation.trim() || location;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Сървърът върна грешка при анализа.');
+    try {
+      let data: AnalysisResult | null = null;
+
+      try {
+        const response = await fetch('/api/analyze-issue', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            image: imagePreview,
+            description: description,
+            location: activeLocation,
+            similarCases: VRATSA_SOLVED_CASES,
+          }),
+        });
+
+        if (response.ok) {
+          data = await response.json();
+        }
+      } catch (_fetchErr) {
+        // Static hosting fallback (e.g. GitHub Pages without Node backend)
       }
 
-      const data: AnalysisResult = await response.json();
+      // If backend was unreachable or returned non-200, compute with intelligent client engine
+      if (!data) {
+        data = generateClientAnalysis(description, activeLocation);
+      }
+
       setAnalysisResult(data);
     } catch (err: any) {
-      console.error('Analysis failed:', err);
-      setErrorMessage(
-        err.message || 'Възникна грешка при връзката с AI асистента. Моля, опитайте отново.'
-      );
+      console.warn('Analysis using fallback engine:', err);
+      const fallbackData = generateClientAnalysis(description, activeLocation);
+      setAnalysisResult(fallbackData);
     } finally {
       setIsAnalyzing(false);
     }

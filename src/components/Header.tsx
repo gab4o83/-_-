@@ -24,6 +24,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { VolunteerProfile } from '../types';
+import { LOGO_PATH, handleImageError } from '../constants/assets';
 
 interface HeaderProps {
   activeTab: 'map' | 'submit' | 'reports' | 'leaderboard' | 'solved' | 'guide' | 'profile';
@@ -310,10 +311,11 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-white border-2 border-emerald-400/80 shadow-md shadow-emerald-950/60 p-0.5 shrink-0 group-hover:scale-105 transition-transform duration-300">
               <img
-                src="/logo.png"
+                src={LOGO_PATH}
                 alt="Умна Враца - Платформа на ПТГ Н. Й. Вапцаров"
                 className="w-full h-full object-contain rounded-full"
                 referrerPolicy="no-referrer"
+                onError={handleImageError}
               />
             </div>
             <div>
@@ -488,10 +490,11 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-white border-2 border-emerald-400/80 shadow-md p-0.5 shrink-0 group-hover:scale-105 transition-transform duration-200">
                   <img
-                    src="/logo.png"
+                    src={LOGO_PATH}
                     alt="Умна Враца"
                     className="w-full h-full object-contain rounded-full"
                     referrerPolicy="no-referrer"
+                    onError={handleImageError}
                   />
                 </div>
                 <div>
@@ -618,10 +621,11 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <div className="w-7 h-7 rounded-full overflow-hidden bg-white border border-emerald-400/80 p-0.5 shrink-0 group-hover:scale-105 transition-transform duration-200 shadow-sm">
                   <img
-                    src="/logo.png"
+                    src={LOGO_PATH}
                     alt="Умна Враца"
                     className="w-full h-full object-contain rounded-full"
                     referrerPolicy="no-referrer"
+                    onError={handleImageError}
                   />
                 </div>
                 <h1 className="text-base sm:text-lg font-black tracking-wider text-white group-hover:text-emerald-400 transition-colors">
@@ -694,7 +698,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="pb-3 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-white border border-emerald-400 p-0.5 overflow-hidden shrink-0 shadow-sm">
-                  <img src="/logo.png" alt="Умна Враца" className="w-full h-full object-contain rounded-full" />
+                  <img src={LOGO_PATH} alt="Умна Враца" className="w-full h-full object-contain rounded-full" onError={handleImageError} />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">

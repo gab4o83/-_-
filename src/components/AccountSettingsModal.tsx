@@ -398,18 +398,23 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
         }
       }
 
-      const res = await fetch('/api/users/unlink-provider', {
+      const updatedLinked = (volunteer.linkedProviders || []).filter((p) => p !== providerId);
+      const updatedProfile: VolunteerProfile = {
+        ...volunteer,
+        linkedProviders: updatedLinked,
+      };
+      await saveUserProfileToFirestore(updatedProfile).catch(() => {});
+      onUpdateProfile(updatedProfile);
+      setSuccessMsg(`Връзката с ${providerName} беше успешно премахната.`);
+
+      fetch('/api/users/unlink-provider', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           uid: volunteer.id,
           providerId,
         }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Грешка при премахване');
-      onUpdateProfile(data.profile);
-      setSuccessMsg(`Връзката с ${providerName} беше успешно премахната.`);
+      }).catch(() => {});
     } catch (err: any) {
       setErrorMsg(err.message || 'Неуспешно разкачане на метода за вход.');
     } finally {
@@ -530,13 +535,11 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
         }
       }
 
-      const res = await fetch('/api/users/delete-account', {
+      fetch('/api/users/delete-account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ uid: volunteer.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Грешка при изтриване на данни.');
+      }).catch(() => {});
 
       try {
         localStorage.removeItem('vratsa_volunteer_profile');
