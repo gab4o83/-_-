@@ -769,8 +769,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                     <User className="w-4 h-4 text-emerald-400" />
                     <span>Данни на профила</span>
                   </h3>
-                  <span className="text-[11px] text-slate-400">
-                    ID: <span className="font-mono text-slate-300">{volunteer.id.slice(0, 8)}</span>
+                  <span className="text-[11px] text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                    Активен акаунт
                   </span>
                 </div>
 

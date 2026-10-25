@@ -46,10 +46,12 @@ export const SubmitSection: React.FC<SubmitSectionProps> = ({
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmittedToBoard, setIsSubmittedToBoard] = useState<boolean>(false);
+  const [activePresetName, setActivePresetName] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const formSectionRef = useRef<HTMLDivElement>(null);
 
   // When prefilled coordinates are received from map pin drop
   useEffect(() => {
@@ -116,8 +118,9 @@ export const SubmitSection: React.FC<SubmitSectionProps> = ({
     }
   };
 
-  // Preset selector
+  // Preset selector with active highlight and smooth auto-scroll to form
   const selectPreset = (preset: typeof SAMPLE_PHOTO_PRESETS[0]) => {
+    setActivePresetName(preset.name);
     setImagePreview(preset.imageUrl);
     setDescription(preset.description);
     setLocation(preset.location);
@@ -127,6 +130,11 @@ export const SubmitSection: React.FC<SubmitSectionProps> = ({
     setAnalysisResult(null);
     setIsSubmittedToBoard(false);
     setErrorMessage(null);
+
+    // Smoothly scroll down to the form so phone users immediately see the loaded problem
+    setTimeout(() => {
+      formSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
   };
 
   // GPS geolocation
@@ -251,6 +259,7 @@ export const SubmitSection: React.FC<SubmitSectionProps> = ({
   };
 
   const handleResetForm = () => {
+    setActivePresetName(null);
     setImagePreview('');
     setDescription('');
     setCustomLocation('');
@@ -277,35 +286,55 @@ export const SubmitSection: React.FC<SubmitSectionProps> = ({
           </p>
         </div>
 
-        {/* Quick Scenario Tester Presets */}
+        {/* Quick Scenario Tester Presets with Active Highlight */}
         <div className="mt-5 pt-4 border-t border-slate-800/80">
-          <span className="text-xs font-semibold text-slate-400 block mb-2">
-            Тествай бърз примерен сигнал за Враца:
+          <span className="text-xs font-semibold text-slate-300 block mb-2.5">
+            Тествай бърз примерен сигнал за Враца (кликнете за автоматично зареждане и скролване):
           </span>
           <div className="flex gap-2 flex-wrap">
-            {SAMPLE_PHOTO_PRESETS.map((preset, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => selectPreset(preset)}
-                className="text-xs bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border border-slate-700 hover:border-emerald-500/50 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 font-medium"
-              >
-                <span>{preset.name}</span>
-              </button>
-            ))}
+            {SAMPLE_PHOTO_PRESETS.map((preset, idx) => {
+              const isSelected = activePresetName === preset.name;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => selectPreset(preset)}
+                  className={`text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 font-semibold cursor-pointer select-none ${
+                    isSelected
+                      ? 'bg-emerald-600 text-white border-2 border-emerald-400 shadow-lg shadow-emerald-950 ring-2 ring-emerald-400/50 scale-105'
+                      : 'bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-emerald-500/50'
+                  }`}
+                  title={`Зареди: ${preset.name}`}
+                >
+                  {isSelected && <span className="text-emerald-200 font-black">✓</span>}
+                  <span>{preset.name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* Main Submission Form Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: Input and Capture */}
-        <div className="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6 shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h3 className="font-bold text-white text-base flex items-center gap-2">
-              <Upload className="w-5 h-5 text-emerald-400" />
-              <span>1. Снимка и локация на проблема</span>
-            </h3>
+      {/* Main Submission Form Grid with auto-scroll reference */}
+      <div ref={formSectionRef} className="space-y-4">
+        {activePresetName && (
+          <div className="bg-emerald-950/70 border border-emerald-500/50 px-4 py-2.5 rounded-2xl text-xs text-emerald-200 flex items-center justify-between shadow-lg animate-in fade-in duration-200">
+            <span className="flex items-center gap-2 font-medium">
+              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Зареден примерен сигнал: <strong className="text-white underline">{activePresetName}</strong></span>
+            </span>
+            <span className="text-[11px] text-emerald-400 font-mono hidden sm:inline">Снимката и адресът са попълнени</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Column: Input and Capture */}
+          <div className="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6 shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <Upload className="w-5 h-5 text-emerald-400" />
+                <span>1. Снимка и локация на проблема</span>
+              </h3>
             {imagePreview && (
               <button
                 type="button"
@@ -580,6 +609,7 @@ export const SubmitSection: React.FC<SubmitSectionProps> = ({
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

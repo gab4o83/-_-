@@ -22,7 +22,8 @@ import {
   ChevronRight,
   Settings,
   Upload,
-  Loader2
+  Loader2,
+  HelpCircle
 } from 'lucide-react';
 import { VolunteerProfile, ReportItem, VolunteerRank } from '../types';
 import { VRATSA_DISTRICTS } from '../data/mockReports';
@@ -39,6 +40,7 @@ interface VolunteerProfileDashboardProps {
   onDeleteAccount?: () => void;
   onResolveReport: (report: ReportItem) => void;
   onNavigateToMap: () => void;
+  onNavigateToGuide?: () => void;
 }
 
 const RANK_THRESHOLDS: { rank: VolunteerRank; minPoints: number; badgeColor: string; icon: string }[] = [
@@ -56,7 +58,8 @@ export const VolunteerProfileDashboard: React.FC<VolunteerProfileDashboardProps>
   onLogout,
   onDeleteAccount,
   onResolveReport,
-  onNavigateToMap
+  onNavigateToMap,
+  onNavigateToGuide
 }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -250,8 +253,8 @@ export const VolunteerProfileDashboard: React.FC<VolunteerProfileDashboardProps>
                   <span>{currentRankInfo.icon}</span>
                   <span>{volunteer.rank}</span>
                 </span>
-                <span className="text-xs text-slate-400 font-mono bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-700">
-                  ID: {volunteer.id.slice(0, 14)}
+                <span className="text-xs text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-lg">
+                  Доброволец на Враца
                 </span>
               </div>
               <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
@@ -276,6 +279,17 @@ export const VolunteerProfileDashboard: React.FC<VolunteerProfileDashboardProps>
 
           {/* Quick Actions */}
           <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap">
+            {onNavigateToGuide && (
+              <button
+                type="button"
+                onClick={onNavigateToGuide}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 hover:text-white text-xs font-bold border border-slate-700 hover:border-emerald-500/40 transition cursor-pointer shadow-sm"
+                title="Отвори правилата и регламента за безопасност"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Правила и безопасност</span>
+              </button>
+            )}
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-white text-xs font-bold border border-slate-700 hover:border-blue-500/40 transition cursor-pointer shadow-sm"

@@ -35,48 +35,6 @@ export interface UserRecord {
 
 const inMemoryUsers = new Map<string, UserRecord>();
 
-// Pre-seed known demo accounts
-const PRESET_DEMO_HASH = hashPassword('123456');
-const demoStefan: UserRecord = {
-  uid: 'vol-stefan-vratsa',
-  email: 'stefan.vratsa@gmail.com',
-  name: 'Стефан Димитров',
-  phone: '0888123456',
-  neighborhood: 'Център',
-  rank: 'Градски майстор',
-  weeklyPoints: 420,
-  totalPoints: 1250,
-  resolvedCount: 9,
-  activeAssignments: [],
-  skills: 'Инструменти, боядисване, осветление',
-  availability: 'Уикенди (събота / неделя)',
-  preferredCategories: ['lighting', 'cleanliness', 'parks'],
-  passwordHash: PRESET_DEMO_HASH,
-  authProvider: 'password',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-};
-const demoElena: UserRecord = {
-  uid: 'vol-elena-ivanova',
-  email: 'elena.ivanova@abv.bg',
-  name: 'Елена Иванова',
-  phone: '0888654321',
-  neighborhood: 'ж.к. Дъбника',
-  rank: 'Квартален пазител',
-  weeklyPoints: 380,
-  totalPoints: 890,
-  resolvedCount: 7,
-  activeAssignments: [],
-  skills: 'Озеленяване, чистота, организиране',
-  availability: 'Делнични дни след 17:30',
-  preferredCategories: ['parks', 'cleanliness'],
-  passwordHash: PRESET_DEMO_HASH,
-  authProvider: 'password',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-};
-inMemoryUsers.set(demoStefan.uid, demoStefan);
-inMemoryUsers.set(demoElena.uid, demoElena);
 
 export async function isEmailAlreadyRegistered(email: string): Promise<boolean> {
   const clean = email.toLowerCase().trim();

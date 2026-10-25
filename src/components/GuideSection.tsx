@@ -152,9 +152,8 @@ export const GuideSection: React.FC = () => {
           <p className="text-xs text-slate-300 leading-relaxed">
             Ако има непосредствена опасност за човешкия живот (оголен проводник под напрежение,
             срутване, пожар, пострадал гражданин), AI асистентът автоматично поставя приоритет
-            <strong className="text-rose-400"> „спешен“</strong> и в полето
-            <code className="text-rose-300 font-mono text-[11px] bg-rose-950 px-1 py-0.5 rounded"> safety_warning</code>
-            инструктира гражданина незабавно да позвъни на <strong className="text-white">тел. 112</strong>!
+            <strong className="text-rose-400"> „Спешен“</strong>, извежда предупреждение за опасност
+            и инструктира гражданина незабавно да позвъни на <strong className="text-white">тел. 112</strong>!
           </p>
           <div className="bg-red-950/40 border border-red-500/30 p-3 rounded-xl text-xs text-red-200">
             Никога не се предоставят инструкции как гражданин да поправя проблем от червения път.
@@ -169,9 +168,8 @@ export const GuideSection: React.FC = () => {
           </div>
           <p className="text-xs text-slate-300 leading-relaxed">
             Ако на снимката се виждат лица на преминаващи хора, регистрационни номера на автомобили
-            или други лични данни, AI маркира
-            <code className="text-cyan-300 font-mono text-[11px] bg-cyan-950 px-1 py-0.5 rounded"> contains_personal_data: true</code>.
-            Платформата автоматично замъглява тези данни преди публикуване, а асистентът никога не описва хората.
+            или други лични данни, AI системата автоматично ги засича и маркира за защита.
+            Платформата замъглява тези зони преди публикуване, а асистентът гарантира поверителността на гражданите.
           </p>
           <div className="bg-cyan-950/40 border border-cyan-500/30 p-3 rounded-xl text-xs text-cyan-200">
             Пълна защита на самоличността на жителите и гостите на град Враца.

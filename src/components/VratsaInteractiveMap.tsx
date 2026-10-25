@@ -754,8 +754,10 @@ export const VratsaInteractiveMap: React.FC<VratsaInteractiveMapProps> = ({
               defaultZoom={13.5}
               mapId="DEMO_MAP_ID"
               internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-              gestureHandling="greedy"
-              disableDefaultUI={false}
+              gestureHandling="cooperative"
+              streetViewControl={false}
+              mapTypeControl={false}
+              fullscreenControl={false}
               onClick={handleMapClick}
             >
               <MapCameraController
@@ -949,7 +951,7 @@ export const VratsaInteractiveMap: React.FC<VratsaInteractiveMapProps> = ({
 
         {/* Selected / Clicked Report Detail Modal Drawer on map */}
         {activePopupReport && (
-          <div className="absolute right-3 bottom-3 top-3 w-80 sm:w-96 z-20 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-2xl shadow-2xl p-4 flex flex-col justify-between overflow-y-auto pointer-events-auto">
+          <div className="absolute inset-x-2 bottom-2 top-2 sm:inset-x-auto sm:right-3 sm:bottom-3 sm:top-3 w-auto sm:w-96 z-20 bg-slate-900/98 backdrop-blur-md border border-slate-700 rounded-2xl shadow-2xl p-4 flex flex-col justify-between overflow-y-auto pointer-events-auto">
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2">
                 <div className="space-y-0.5">

@@ -41,6 +41,7 @@ import {
 import { VolunteerProfile, VolunteerRank } from '../types.ts';
 import { VRATSA_DISTRICTS } from '../data/mockReports.ts';
 import { LOGO_PATH, handleImageError } from '../constants/assets';
+import { ADMIN_USER_ID } from '../constants/admin';
 
 interface VolunteerRegistrationModalProps {
   isOpen: boolean;
@@ -67,29 +68,6 @@ const AVAILABILITY_OPTIONS = [
   'Гъвкаво (по предварително съгласуване)'
 ];
 
-// Demo accounts for fast 1-click test login
-const PRESET_DEMO_ACCOUNTS = [
-  {
-    name: 'Стефан Димитров',
-    email: 'stefan.vratsa@gmail.com',
-    neighborhood: 'Център',
-    rank: 'Градски майстор' as VolunteerRank,
-    weeklyPoints: 420,
-    totalPoints: 1250,
-    resolvedCount: 9,
-    roleTitle: 'ТОП Доброволец (#1)'
-  },
-  {
-    name: 'Елена Иванова',
-    email: 'elena.ivanova@abv.bg',
-    neighborhood: 'ж.к. Дъбника',
-    rank: 'Квартален пазител' as VolunteerRank,
-    weeklyPoints: 380,
-    totalPoints: 890,
-    resolvedCount: 7,
-    roleTitle: 'Активен пазител (#2)'
-  }
-];
 
 export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProps> = ({
   isOpen,
@@ -394,47 +372,6 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
     }
   };
 
-  // Quick Demo Login for instant testing
-  const handleQuickLogin = (demo: typeof PRESET_DEMO_ACCOUNTS[0]) => {
-    const profile: VolunteerProfile = {
-      id: `vol-demo-${demo.name.toLowerCase().replace(/\s+/g, '-')}`,
-      name: demo.name,
-      emailOrPhone: demo.email,
-      gmail: demo.email,
-      neighborhood: demo.neighborhood,
-      joinedDate: 'Преди 3 седмици',
-      weeklyPoints: demo.weeklyPoints,
-      totalPoints: demo.totalPoints,
-      resolvedTasksCount: demo.resolvedCount,
-      activeAssignments: [],
-      rank: demo.rank,
-      skills: 'Инструменти за ремонт, боядисване, почистване',
-      preferredCategories: ['lighting', 'cleanliness', 'parks'],
-      availability: 'Уикенди (събота / неделя)',
-      badges: [
-        {
-          id: 'welcome-badge',
-          name: 'Активен гражданин на Враца 🤝',
-          icon: 'Users',
-          description: 'Успешна регистрация в доброволческия корпус на Враца'
-        },
-        {
-          id: 'master-badge',
-          name: 'Градски пазител 🛡️',
-          icon: 'Shield',
-          description: 'Над 5 решени градски сигнала'
-        }
-      ]
-    };
-
-    if (onLogin) {
-      onLogin(profile);
-    } else {
-      onRegister(profile);
-    }
-    onClose();
-  };
-
   // Submit Login with real Firebase Auth & Database verification
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -443,17 +380,6 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
     const identifier = loginIdentifier.trim();
     if (!identifier) {
       setErrorMsg('Моля, въведете имейл, Gmail или телефонен номер.');
-      return;
-    }
-
-    // Check if matches preset demo
-    const matchedPreset = PRESET_DEMO_ACCOUNTS.find(
-      (a) =>
-        a.email.toLowerCase() === identifier.toLowerCase() ||
-        a.name.toLowerCase() === identifier.toLowerCase()
-    );
-    if (matchedPreset) {
-      handleQuickLogin(matchedPreset);
       return;
     }
 
@@ -937,43 +863,6 @@ export const VolunteerRegistrationModal: React.FC<VolunteerRegistrationModalProp
               <div className="h-px bg-slate-800 flex-1" />
             </div>
 
-            {/* Quick 1-Click Demo Accounts */}
-            <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  Бърз демо вход с 1 клик
-                </span>
-                <span className="text-[10px] text-slate-500">За тестване</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {PRESET_DEMO_ACCOUNTS.map((demo) => (
-                  <button
-                    key={demo.name}
-                    type="button"
-                    onClick={() => handleQuickLogin(demo)}
-                    className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800/90 border border-slate-700/80 hover:border-emerald-500/50 transition-all text-left cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold text-xs">
-                        {demo.name.slice(0, 1)}
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
-                          {demo.name}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          {demo.neighborhood} · {demo.roleTitle}
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-mono font-bold text-amber-400 tabular-nums">
-                      {demo.weeklyPoints} т.
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
 
             {/* Login Form */}
             <form onSubmit={handleLoginSubmit} className="space-y-4">

@@ -13,6 +13,7 @@ import {
   updateReportInFirestore,
   saveUserProfileToFirestore,
   addPointsToVolunteerInFirestore,
+  deleteReportFromFirestore,
   sanitizeReport
 } from './lib/firestoreService';
 import { Header } from './components/Header';
@@ -25,6 +26,8 @@ import { SolvedCasesSection } from './components/SolvedCasesSection';
 import { GuideSection } from './components/GuideSection';
 import { VolunteerRegistrationModal } from './components/VolunteerRegistrationModal';
 import { VolunteerProfileDashboard } from './components/VolunteerProfileDashboard';
+import { AdminDashboard } from './components/AdminDashboard';
+import { ADMIN_USER_ID, isAdminUser } from './constants/admin';
 import { INITIAL_REPORTS } from './data/mockReports';
 import { ReportItem, VolunteerProfile } from './types';
 import { LOGO_PATH, handleImageError } from './constants/assets';
@@ -86,13 +89,50 @@ export default function App() {
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | 'card'>('signup');
+  const [forceShowVolunteerProfile, setForceShowVolunteerProfile] = useState(false);
 
-  // Listen for Google Maps quota exceeded
+  // Helper: Start of current weekly leaderboard cycle (Monday 00:00:00)
+  const getStartOfCurrentWeek = (): number => {
+    const d = new Date();
+    const day = d.getDay(); // 0 = Sunday, 1 = Monday
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    monday.setHours(0, 0, 0, 0);
+    return monday.getTime();
+  };
+
+  // Weekly cleanup: automatically prune resolved problems from past weekly cycles so active count stays clean
   useEffect(() => {
-    const handleQuota = () => setQuotaExceeded(true);
-    window.addEventListener('gmp-quota-exceeded', handleQuota);
-    return () => window.removeEventListener('gmp-quota-exceeded', handleQuota);
+    const mondayTime = getStartOfCurrentWeek();
+    setReports((prev) => {
+      const activeOrThisWeek = prev.filter((r) => {
+        if (r.status !== 'решен') return true;
+        if (r.resolvedAt) {
+          const resDate = new Date(r.resolvedAt).getTime();
+          return !isNaN(resDate) && resDate >= mondayTime;
+        }
+        // If resolved without a date or from older mocks, archive it out of active feed
+        return false;
+      });
+
+      if (activeOrThisWeek.length !== prev.length) {
+        return activeOrThisWeek;
+      }
+      return prev;
+    });
   }, []);
+
+  // Admin report deletion handler
+  const handleDeleteReport = async (reportId: string) => {
+    setReports((prev) => prev.filter((r) => r.id !== reportId));
+    try {
+      await deleteReportFromFirestore(reportId);
+    } catch (e) {
+      console.warn('Could not delete report from Firestore:', e);
+    }
+    fetch(`/api/reports/${reportId}`, { method: 'DELETE' }).catch(() => {});
+    showToast('Сигналът беше успешно изтрит от системата!');
+  };
 
   // Load reports from Firestore & backend with real-time Firestore sync
   useEffect(() => {
@@ -472,6 +512,8 @@ export default function App() {
     setActiveTab('solved');
   };
 
+  const activeReportsCount = reports.filter((r) => r.status !== 'решен').length;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-white">
       {/* Google Maps Error Notice Banner */}
@@ -489,7 +531,7 @@ export default function App() {
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-emerald-400/40 animate-bounce max-w-[90vw]">
+        <div className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-emerald-400/40 animate-slideUp max-w-[90vw]">
           <CheckCircle2 className="w-5 h-5 text-emerald-200 shrink-0" />
           <span className="text-xs sm:text-sm font-semibold">{toastMessage}</span>
         </div>
@@ -501,7 +543,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         userRole={userRole}
         setUserRole={setUserRole}
-        reportsCount={reports.length}
+        reportsCount={activeReportsCount}
         currentVolunteer={currentVolunteer}
         onOpenRegisterModal={handleOpenSignUp}
         onOpenLogin={handleOpenLogin}
@@ -512,13 +554,13 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-5 sm:py-8 space-y-6 sm:space-y-8 pb-28 sm:pb-12">
-        {/* TAB 1: Central Map & Signals Feed */}
+        {/* TAB 1: Central Map (EXCLUSIVELY Map view with zero duplicate signals feed) */}
         {activeTab === 'map' && (
-          <div className="space-y-8 animate-fadeIn">
+          <div className="space-y-6 animate-fadeIn">
             {/* Top Banner introducing the interactive map and AI sorting */}
-            <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 border border-slate-800 rounded-3xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
               <div className="flex items-start sm:items-center gap-4">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-white border-2 border-emerald-400/80 shadow-2xl p-1 shrink-0">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-white border-2 border-emerald-400/80 shadow-2xl p-1 shrink-0">
                   <img
                     src={LOGO_PATH}
                     alt="Умна Враца - Платформа на ПТГ Н. Й. Вапцаров"
@@ -530,40 +572,50 @@ export default function App() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
                     <Map className="w-4 h-4" />
-                    Умна Враца • ПТГ „Н. Й. Вапцаров“
+                    Умна Враца • Интерактивна карта
                   </div>
                   <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-                    Градски проблеми в реално време, сортирани по AI наложителност
+                    Градски проблеми в реално време на картата на Враца
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-300">
-                    Сигнали за счупено осветление, дупки, пейки и чистота. Включете се като доброволец, качете снимка след ремонт и трупайте точки за седмичната класация!
+                    Кликнете върху маркер, за да видите проблема или да се включите в акция. За пълния подробен каталог преминете в меню „Сигнали“.
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
                 <button
                   onClick={() => setActiveTab('submit')}
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2"
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Sparkles className="w-4 h-4" />
-                  Подай нов сигнал
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Подай сигнал
+                </button>
+                <button
+                  onClick={() => setActiveTab('reports')}
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-blue-400" />
+                  Списък със сигнали ({activeReportsCount})
                 </button>
                 <button
                   onClick={() => setActiveTab('leaderboard')}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-semibold border border-amber-500/20 transition-all flex items-center gap-1.5"
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-semibold border border-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Trophy className="w-4 h-4 text-amber-400" />
-                  Седмична класация
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  Класация
                 </button>
               </div>
             </div>
 
-            {/* Central Interactive Leaflet Map of Vratsa */}
+            {/* Central Interactive Map of Vratsa */}
             <VratsaInteractiveMap
               reports={reports}
               selectedReportId={selectedReportId}
-              onSelectReport={(id) => setSelectedReportId(id)}
+              onSelectReport={(id) => {
+                setSelectedReportId(id);
+                setActiveTab('reports');
+              }}
               onMapClickNewSignal={handleMapClickNewSignal}
               onVolunteerAction={(id) => handleJoinVolunteer(id)}
               onResolveAction={(id) => {
@@ -573,31 +625,6 @@ export default function App() {
               userRole={userRole}
               currentVolunteerName={currentVolunteer?.name}
             />
-
-            {/* Signals Feed Sorted by AI Urgency */}
-            <div className="space-y-4 pt-4 border-t border-slate-800">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-emerald-400" />
-                    Всички сигнали (сортирани по AI Наложителност)
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Спешните аварии са класирани най-отгоре за незабавна реакция от службите и гражданите.
-                  </p>
-                </div>
-              </div>
-
-              <ReportListSection
-                reports={reports}
-                userRole={userRole}
-                onJoinVolunteer={(id, name) => handleJoinVolunteer(id, name)}
-                onApproveByOfficial={handleApproveByOfficial}
-                onAssignDepartment={handleAssignDepartment}
-                onSelectCase={handleSelectCase}
-                onOpenResolutionModal={(report) => setResolutionReport(report)}
-              />
-            </div>
           </div>
         )}
 
@@ -622,6 +649,9 @@ export default function App() {
             onAssignDepartment={handleAssignDepartment}
             onSelectCase={handleSelectCase}
             onOpenResolutionModal={(report) => setResolutionReport(report)}
+            isAdmin={isAdminUser(currentVolunteer)}
+            onDeleteReport={handleDeleteReport}
+            focusedReportId={selectedReportId}
           />
         )}
 
@@ -651,20 +681,52 @@ export default function App() {
         {/* TAB 6: Guide & Safety Rules */}
         {activeTab === 'guide' && <GuideSection />}
 
-        {/* TAB 7: My Volunteer Profile & Dashboard */}
+        {/* TAB 7: My Volunteer Profile & Dashboard / Admin Dashboard */}
         {activeTab === 'profile' && (
           currentVolunteer ? (
-            <VolunteerProfileDashboard
-              volunteer={currentVolunteer}
-              reports={reports}
-              onUpdateProfile={(updated) => {
-                setCurrentVolunteer(updated);
-                showToast('Профилът беше успешно обновен!');
-              }}
-              onLogout={handleLogoutVolunteer}
-              onResolveReport={(report) => setResolutionReport(report)}
-              onNavigateToMap={() => setActiveTab('map')}
-            />
+            isAdminUser(currentVolunteer) && !forceShowVolunteerProfile ? (
+              <AdminDashboard
+                currentVolunteer={currentVolunteer}
+                reports={reports}
+                onDeleteReport={handleDeleteReport}
+                userRole={userRole}
+                setUserRole={setUserRole}
+                onLogout={handleLogoutVolunteer}
+                onNavigateToMap={() => setActiveTab('map')}
+                onSwitchToVolunteerDashboard={() => setForceShowVolunteerProfile(true)}
+              />
+            ) : (
+              <div className="space-y-4">
+                {isAdminUser(currentVolunteer) && (
+                  <div className="flex items-center justify-between p-3.5 bg-slate-900 border border-emerald-500/50 rounded-2xl shadow-xl">
+                    <span className="text-xs text-emerald-300 font-semibold flex items-center gap-2">
+                      <span className="text-base">👑</span>
+                      <span>В момента сте в личен доброволчески изглед на Администратора</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setForceShowVolunteerProfile(false)}
+                      className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-xl font-bold cursor-pointer transition shadow-md shadow-emerald-950 flex items-center gap-1.5"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Към Админ Дашборд</span>
+                    </button>
+                  </div>
+                )}
+                <VolunteerProfileDashboard
+                  volunteer={currentVolunteer}
+                  reports={reports}
+                  onUpdateProfile={(updated) => {
+                    setCurrentVolunteer(updated);
+                    showToast('Профилът беше успешно обновен!');
+                  }}
+                  onLogout={handleLogoutVolunteer}
+                  onResolveReport={(report) => setResolutionReport(report)}
+                  onNavigateToMap={() => setActiveTab('map')}
+                  onNavigateToGuide={() => setActiveTab('guide')}
+                />
+              </div>
+            )
           ) : (
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-4 max-w-md mx-auto">
               <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto text-2xl font-bold">
@@ -672,7 +734,7 @@ export default function App() {
               </div>
               <h3 className="text-lg font-bold text-white">Влезте в профила си</h3>
               <p className="text-xs text-slate-400">
-                За да достъпите личния си доброволчески панел и поетите задачи, моля влезте с Google или с имейл и парола.
+                За да достъпите личния си доброволчески панел или административния център, моля влезте с Google или с имейл и парола.
               </p>
               <button
                 onClick={handleOpenLogin}
@@ -815,7 +877,11 @@ export default function App() {
               )}
             </div>
             <span className="text-[10px] mt-0.5 tracking-tight">
-              {currentVolunteer ? 'Профил' : 'Вход'}
+              {currentVolunteer
+                ? isAdminUser(currentVolunteer)
+                  ? 'Админ'
+                  : 'Профил'
+                : 'Вход'}
             </span>
           </button>
         </div>

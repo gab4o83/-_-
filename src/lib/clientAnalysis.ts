@@ -44,11 +44,16 @@ export function generateClientAnalysis(description: string, activeLocation: stri
 
   if (isDangerous) {
     const isUrgent =
-      descLower.includes('кабел') ||
+      (descLower.includes('кабел') && (descLower.includes('оголен') || descLower.includes('висящ'))) ||
       descLower.includes('ток') ||
       descLower.includes('напрежение') ||
       descLower.includes('срутване') ||
+      (descLower.includes('шахта') && descLower.includes('открит')) ||
       descLower.includes('спеш');
+
+    const isDetailedHazard = descLower.length > 25 && (descLower.includes('дълбок') || descLower.includes('опасн') || descLower.includes('авари'));
+
+    const calculatedScore = isUrgent ? 92 : isDetailedHazard ? 72 : 48;
 
     return {
       category: descLower.includes('кабел') || descLower.includes('стълб') || descLower.includes('осветление')
@@ -59,19 +64,21 @@ export function generateClientAnalysis(description: string, activeLocation: stri
         ? 'Зелени площи'
         : 'ВиК',
       problem: descLower.includes('кабел')
-        ? 'Опасен висящ кабел с риск от токов удар'
+        ? 'Опасен кабел с риск от токов удар'
         : descLower.includes('осветление') || descLower.includes('лампа')
-        ? 'Неработещо улично осветление и риск от инциденти'
+        ? 'Неработещо улично осветление'
         : descLower.includes('дупка')
-        ? 'Дълбока дупка на пътното платно'
+        ? 'Дупка на пътното платно'
         : descLower.includes('клон')
         ? 'Надвиснал опасен клон над пешеходна зона'
-        : 'Аварийна повреда на обществена инфраструктура',
-      priority: isUrgent ? 'спешен' : 'висок',
-      urgencyScore: isUrgent ? 95 : 86,
+        : 'Повреда на обществена инфраструктура',
+      priority: isUrgent ? 'спешен' : isDetailedHazard ? 'висок' : 'нормален',
+      urgencyScore: calculatedScore,
       urgencyRationale: isUrgent
-        ? 'Критична непосредствена опасност за човешкия живот и безопасност във Враца.'
-        : 'Висок риск от пътно-транспортни произшествия или инциденти с пешеходци.',
+        ? 'Критична непосредствена опасност за безопасността на гражданите във Враца.'
+        : isDetailedHazard
+        ? 'Повишен риск от пътен или пешеходен инцидент, изискващ проверка.'
+        : 'Стандартна градска нередност за планиран ремонт, без директна опасност за живота.',
       path: 'red',
       path_reason: 'Опасна и регулирана дейност, която изисква специализирана техника и лицензиран авариен екип на общината.',
       needs_approval: true,

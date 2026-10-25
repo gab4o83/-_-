@@ -5,6 +5,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   query,
   limit,
@@ -309,5 +310,75 @@ export async function addPointsToVolunteerInFirestore(
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+// Delete a civic report from Firestore (Admin capability)
+export async function deleteReportFromFirestore(reportId: string): Promise<void> {
+  const path = `reports/${reportId}`;
+  try {
+    await deleteDoc(doc(db, 'reports', reportId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// Fetch all registered users / volunteer profiles from Firestore
+export async function fetchAllUsersFromFirestore(): Promise<VolunteerProfile[]> {
+  const path = 'users';
+  try {
+    const snap = await getDocs(collection(db, path));
+    if (snap.empty) {
+      return [];
+    }
+    const profiles: VolunteerProfile[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      profiles.push({
+        id: d.id,
+        name: data.name || 'Потребител',
+        emailOrPhone: data.emailOrPhone || data.email || 'Не е посочен',
+        gmail: data.gmail || (data.email?.includes('@') ? data.email : undefined),
+        phone: data.phone || (data.emailOrPhone?.startsWith('0') || data.emailOrPhone?.startsWith('+') ? data.emailOrPhone : undefined),
+        neighborhood: data.neighborhood || 'Център',
+        joinedDate: data.joinedDate || '2026 г.',
+        weeklyPoints: typeof data.weeklyPoints === 'number' ? data.weeklyPoints : 0,
+        totalPoints: typeof data.totalPoints === 'number' ? data.totalPoints : 0,
+        resolvedTasksCount: typeof data.resolvedTasksCount === 'number' ? data.resolvedTasksCount : 0,
+        activeAssignments: Array.isArray(data.activeAssignments) ? data.activeAssignments : [],
+        rank: data.rank || 'Новак доброволец',
+        skills: data.skills,
+        preferredCategories: Array.isArray(data.preferredCategories) ? data.preferredCategories : [],
+        availability: data.availability,
+        photoURL: data.photoURL,
+        linkedProviders: Array.isArray(data.linkedProviders) ? data.linkedProviders : [],
+        facebookId: data.facebookId,
+        googleEmail: data.googleEmail,
+        authProvider: data.authProvider,
+        badges: Array.isArray(data.badges) ? data.badges : []
+      });
+    });
+
+    // Sort by total points descending
+    profiles.sort((a, b) => b.totalPoints - a.totalPoints);
+    return profiles;
+  } catch (error) {
+    console.warn('Could not fetch all users from Firestore:', error);
+    try {
+      handleFirestoreError(error, OperationType.LIST, path);
+    } catch (_e) {
+      // Ignored
+    }
+    return [];
+  }
+}
+
+// Delete a user profile from Firestore (Admin capability)
+export async function deleteUserFromFirestore(userId: string): Promise<void> {
+  const path = `users/${userId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
   }
 }

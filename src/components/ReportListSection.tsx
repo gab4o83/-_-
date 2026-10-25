@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ReportItem, ResolutionPath } from '../types';
 import { PathBadge, PriorityBadge } from './PathBadge';
 import { AnalysisCard } from './AnalysisCard';
@@ -19,7 +19,8 @@ import {
   ArrowUpDown,
   Sparkles,
   Camera,
-  Layers
+  Layers,
+  Trash2
 } from 'lucide-react';
 
 interface ReportListSectionProps {
@@ -31,6 +32,9 @@ interface ReportListSectionProps {
   onSelectCase: (code: string) => void;
   onOpenResolutionModal?: (report: ReportItem) => void;
   onShowOnMap?: (report: ReportItem) => void;
+  isAdmin?: boolean;
+  onDeleteReport?: (reportId: string) => void;
+  focusedReportId?: string | null;
 }
 
 export const ReportListSection: React.FC<ReportListSectionProps> = ({
@@ -41,7 +45,10 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
   onAssignDepartment,
   onSelectCase,
   onOpenResolutionModal,
-  onShowOnMap
+  onShowOnMap,
+  isAdmin,
+  onDeleteReport,
+  focusedReportId
 }) => {
   const [selectedPath, setSelectedPath] = useState<ResolutionPath | 'all'>('all');
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string>('all');
@@ -49,6 +56,19 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
   const [sortBy, setSortBy] = useState<'urgency' | 'newest' | 'volunteers'>('urgency');
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [blurStates, setBlurStates] = useState<Record<string, boolean>>({});
+
+  // Auto-expand and scroll to focused report from map or notification
+  useEffect(() => {
+    if (focusedReportId) {
+      setExpandedReportId(focusedReportId);
+      setTimeout(() => {
+        const el = document.getElementById(`report-${focusedReportId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+    }
+  }, [focusedReportId]);
 
   const toggleBlur = (reportId: string, defaultBlur: boolean) => {
     setBlurStates((prev) => ({
@@ -243,13 +263,14 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
             return (
               <div
                 key={report.id}
-                className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl overflow-hidden shadow-lg transition-all"
+                id={`report-${report.id}`}
+                className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl overflow-hidden shadow-lg transition-all touch-pan-y"
               >
                 {/* Header row */}
                 <div className="p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  {/* Photo thumbnail */}
-                  <div className="flex items-start gap-4 flex-1">
-                    <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-slate-950 shrink-0 border border-slate-800">
+                  {/* Photo thumbnail & Signal Details */}
+                  <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 flex-1 w-full min-w-0">
+                    <div className="relative w-full sm:w-28 h-44 sm:h-28 rounded-xl overflow-hidden bg-slate-950 shrink-0 border border-slate-800">
                       <img
                         src={report.status === 'решен' && report.resolvedImageUrl ? report.resolvedImageUrl : report.imageUrl}
                         alt={report.title}
@@ -274,7 +295,7 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
                       )}
                     </div>
 
-                    <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="space-y-1.5 flex-1 min-w-0 w-full select-text">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs text-emerald-400 font-bold tabular-nums">
                           {report.ticketNumber}
@@ -296,19 +317,19 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
                         </div>
                       </div>
 
-                      <h4 className="font-bold text-white text-base leading-snug line-clamp-2">
+                      <h4 className="font-bold text-white text-base leading-snug break-words">
                         {report.title}
                       </h4>
 
-                      <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
-                        <span className="flex items-center gap-1 text-slate-300">
+                      <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-400 flex-wrap">
+                        <span className="flex items-center gap-1 text-slate-300 min-w-0">
                           <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span className="truncate max-w-xs">{report.location}</span>
+                          <span className="break-words">{report.location}</span>
                         </span>
-                        <span>·</span>
-                        <span className="text-slate-400">{report.neighborhood}</span>
-                        <span>·</span>
-                        <span className="flex items-center gap-1 text-slate-400">
+                        <span className="hidden sm:inline">·</span>
+                        <span className="text-slate-400 bg-slate-800/60 px-1.5 py-0.5 rounded text-[11px]">{report.neighborhood}</span>
+                        <span className="hidden sm:inline">·</span>
+                        <span className="flex items-center gap-1 text-slate-400 text-[11px]">
                           <Clock className="w-3.5 h-3.5" />
                           <span>{report.createdAt}</span>
                         </span>
@@ -329,6 +350,22 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
                         >
                           <Camera className="w-3.5 h-3.5" />
                           <span>Заснеми & Точки</span>
+                        </button>
+                      )}
+
+                      {isAdmin && onDeleteReport && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Админ: Сигурни ли сте, че искате да изтриете сигнал ${report.ticketNumber} "${report.title}"?`)) {
+                              onDeleteReport(report.id);
+                            }
+                          }}
+                          className="bg-red-950/70 hover:bg-red-900 text-red-200 hover:text-white text-xs px-2.5 py-1.5 rounded-lg border border-red-800/40 transition flex items-center gap-1 font-bold cursor-pointer"
+                          title="Администраторско премахване на сигнал"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                          <span>Изтрий</span>
                         </button>
                       )}
 
@@ -390,11 +427,11 @@ export const ReportListSection: React.FC<ReportListSectionProps> = ({
                 {isExpanded && (
                   <div className="border-t border-slate-800 bg-slate-950/70 p-4 sm:p-6 space-y-6">
                     {/* Description quote */}
-                    <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 space-y-1">
+                    <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 space-y-1 select-text touch-pan-y">
                       <span className="font-semibold text-slate-400 block uppercase tracking-wider text-[10px]">
                         Подадено описание от гражданин:
                       </span>
-                      <p className="text-sm text-slate-200">{report.description}</p>
+                      <p className="text-sm text-slate-200 leading-relaxed break-words">{report.description}</p>
                     </div>
 
                     {/* Official assigned department (if any) */}
